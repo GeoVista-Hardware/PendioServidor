@@ -108,23 +108,42 @@ platformio device monitor       # Monitor Serial
 | Pendio 8 | Raia Olimpica USP |
 | Pendio 9 | Sensor 14/11/2024 |
 
-## 🗝️ Chaves LoRaWAN (AppEUI e AppKey)
+## 🗝️ Configuração de Credenciais
 
-O histórico das chaves pode ser consultado em [➡️ docs/CHAVES.md](docs/CHAVES.md).
+### Estrutura do Arquivo `credentials.h`
 
-Os valores de: `AppEUI`e `AppKey` deve ser atualizado em `include\credentials.h` seguindo:
+O projeto utiliza um arquivo centralizado para todas as credenciais sensíveis:
+
 ```c
-#ifndef _CREDENTIALS_H
-#define _CREDENTIALS_H
+// LoRaWAN (produção)
+const char APPEUI[] = "Seu AppEUI aqui";    // 16 caracteres HEX
+const char APPKEY[] = "Sua AppKey aqui";    // 32 caracteres HEX
 
-const char APPEUI[] = "Valor do AppEUI aqui";
-const char APPKEY[] = "Valor do AppKEY aqui";
-
-#endif /* _CREDENTIALS_H */
+// Wi-Fi + Firebase (modo protótipo)
+const char WIFI_SSID[] = "Nome da rede";
+const char WIFI_PASSWORD[] = "Senha da rede";
+const char FIREBASE_API_KEY[] = "Sua API Key";
+const char FIREBASE_DB_URL[] = "seu-projeto.firebaseio.com";
+const char DEVICE_ID[] = "ESP32_PENDIO_01";  // Identificador único
 ```
 
-Conforme está em `include\credentials.example.h`. O passo a passo para a configuração:
-1. Copiar para `include\credentials.h`
-2. Substituir os valores corretos
+### Passo a Passo para Configurar
+
+1. **Copiar o template:**
+   ```bash
+   cp include/credentials.example.h include/credentials.h
+   ```
+
+2. **Editar `include/credentials.h` com seus valores.**
+
+3. **Verificar `.gitignore`:**
+   Certifique-se que `credentials.h` está na lista de ignorados:
+   ```
+   include/credentials.h
+   ```
+
+### Histórico de Chaves LoRaWAN
+
+O histórico das chaves de produção pode ser consultado em [➡️ docs/CHAVES.md](docs/CHAVES.md).
 
 --- 
