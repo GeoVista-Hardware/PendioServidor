@@ -12,6 +12,8 @@
 #ifndef _SENSORES_H
 #define _SENSORES_H
 
+#include "Aplic.h"
+
 struct SPendio_Data_Type {        // 3+3+3+5= 14 bytes
   char acx[3];                            // acc X
   char acy[3];                            // acc Y

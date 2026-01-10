@@ -45,4 +45,16 @@ typedef unsigned short ushort;
 #include "HW.h"
 #include "Sensores.h"
 
+//------------------------------------------------------------------------------
+//  SELETOR DE MODO DE OPERAÇÃO
+
+// Descomente a linha abaixo para ativar o modo Protótipo (Wi-Fi + Firebase)
+// Comente para compilar a versão LoRaWAN
+#define COMMUNICATION_MODE_WIFI 
+
+// Definir para usar EEPROM para persistência de dados
+#define USE_EEPROM
+
+//------------------------------------------------------------------------------
+
 #endif /* _APL_H */
