@@ -1,99 +1,250 @@
-# 📡 Pendio - Monitoramento de Taludes com LoRaWAN
+# 📡 Pendio - Monitoramento de Taludes (LoRaWAN + Wi-Fi)
 
-Este repositório contém o firmware para o sistema de monitoramento de taludes e encostas "Pendio", baseado na placa Wemos D1 R32 (ESP32) e no módulo LoRaWAN Robocore (SMW_SX1262M0).
+Firmware integrado para o sistema de monitoramento de taludes e encostas "Pendio", baseado no ESP32 (Wemos D1 R32) com suporte para comunicação via LoRaWAN (Robocore SMW_SX1262M0) e Wi-Fi + Firebase Realtime Database.
 
 ---
 
 ## 📝 Sobre o Projeto
 
-O sistema realiza a leitura de diversos sensores e envia os dados consolidados via rede LoRaWAN.
+O sistema realiza leitura integrada de múltiplos sensores e telemetria em tempo real, com capacidade de alternar entre dois modos de comunicação:
 
-- **Versão do SW**: WRCPendio Wemos Robocore CPendio (10/01/2024)
-- **Autores**: Eng. Nuncio Perrella, MSc e Arnaldo
+- **Modo LoRaWAN** (Padrão - Produção): Comunicação de longa distância com baixo consumo
+- **Modo Wi-Fi + Firebase** (Protótipo - Desenvolvimento): Comunicação local em tempo real com armazenamento em nuvem
+
+| Aspecto | Detalhes |
+|---------|----------|
+| **Versão do SW** | WRCPendio Wemos Robocore CPendio (10/01/2026) |
+| **Autores** | Eng. Nuncio Perrella MSc, Eng. Arnaldo, Eng. André Maiolini |
+| **Arquitetura** | Handlers abstratos (interface polimórfica) |
+| **Framework** | Arduino/PlatformIO |
+| **Alvo** | ESP32 DOIT DevKit V1 |
 
 ---
 
 ## ⚡ Hardware Principal
 
-- **MCU**: Wemos D1 R32 (ESP32)
-- **LoRaWAN**: Módulo Robocore SMW_SX1262M0
+- **MCU**: Wemos D1 R32 (ESP32 / DOIT DevKit V1)
+- **Comunicação**:
+    - LoRaWAN: Módulo Robocore SMW_SX1262M0 (UART)
+    - Wi-Fi: Built-in do ESP32
 - **Sensores**:
-    - Sensores SPendio (comunicação RS485)
-    - Sensor de Temp/Umidade (AHT10/AHT20)
-    - Sensor de Pressão/Temp (BMP280)
-    - Sensor de Chuva (Contacto seco)
-    - Monitor de Bateria (Divisor de tensão)
+    - **RS485**: Sensores SPendio (3 unidades: Base, Meio, Topo)
+    - **I2C**: Temperatura/Umidade (AHT10/AHT20) + Pressão (BMP280)
+    - **GPIO**: Sensor de Chuva (contato seco)
+    - **ADC**: Monitor de tensão da bateria
 
 ```mermaid
 graph LR
-    A["ESP32<br/>(DOIT V1)"] --> B["SMW_SX1262M0<br/>(LoRaWAN)"]
-    A --> C["I2C"]
-    C --> D["AHT10/20<br/>(Temp/Umidade)"]
-    C --> E["BMP280<br/>(Pressão)"]
-    A --> F["RS485"]
-    F --> G["SPendio"]
-    A --> H["GPIO<br/>(Chuva)"]
-    A --> I["ADC<br/>(Bateria)"]
+    A["ESP32<br/>(Wemos D1 R32)"] -->|UART1| B["SMW_SX1262M0<br/>(LoRaWAN)"]
+    A -->|Wi-Fi| C["Firebase<br/>RTDB"]
+    A -->|I2C| D["Sensores<br/>(AHT + BMP)"]
+    A -->|RS485| E["SPendio<br/>(3x)"]
+    A -->|GPIO| F["Chuva"]
+    A -->|ADC| G["Bateria"]
 ```
 
-Para um detalhamento completo do mapeamento de pinos, consulte [➡️ docs/HARDWARE.md](docs/HARDWARE.md).
+**Mapeamento de Pinos**: Ver [docs/HARDWARE.md](docs/HARDWARE.md)
 
-A descrição completa do formato da mensagem enviada via LoRaWAN está documentada em [➡️ docs/PROTOCOLO.md](docs/PROTOCOLO.md).
+**Protocolo de Payload**: Ver [docs/PROTOCOLO.md](docs/PROTOCOLO.md)
 
 --- 
 
-## 📁 Estrutura
+## 📁 Estrutura do Projeto
 
 ```
 PendioServidor/
-├── include/           # Headers (.h)
-├── src/               # Implementações (.cpp)
-├── lib/               # Bibliotecas externas
-├── docs/              # HARDWARE, PROTOCOLO
-├── README.md          # Este arquivo
-├── QUICK_START.md     # Primeiros passos
-├── ARCHITECTURE.md    # Design de handlers
-├── HANDLERS.md        # Guia de implementação
-└── INTEGRATION_CHECKLIST.md
+├── include/
+│   ├── system_definitions.h        # Configurações globais (modos, timeouts etc.)
+│   ├── hardware_definitions.h      # Mapeamento e inicialização de pinos
+│   ├── comm/
+│   │   ├── CommunicationHandler.h  # Interface abstrata
+│   │   ├── LoRaHandler.h           # Handler LoRaWAN
+│   │   ├── WiFiHandler.h           # Handler Wi-Fi + Firebase
+│   │   └── credentials.h           # Credenciais (git ignored)
+│   ├── core/
+│   │   ├── state_machine.h         # Máquina de estados
+│   │   ├── system_init.h           # Inicialização
+│   │   └── system_utils.h          # Utilitários
+│   ├── hardware/
+│   │   └── Sensores.h              # Interface de sensores
+│   └── utils/
+│       └── Logger.h                # Sistema de logging
+├── src/
+│   ├── main.cpp                    # Firmware principal
+│   ├── comm/
+│   │   ├── LoRaHandler.cpp
+│   │   └── WiFiHandler.cpp
+│   ├── core/
+│   │   ├── state_machine.cpp
+│   │   ├── system_init.cpp
+│   │   └── system_utils.cpp
+│   ├── hardware/
+│   │   └── Sensores.cpp
+│   └── utils/
+│       └── Logger.cpp
+├── lib/                            # Bibliotecas externas
+│   ├── Adafruit_AHTX0/
+│   ├── Adafruit_BMP280_Library/
+│   ├── Adafruit_BusIO/
+│   ├── Adafruit_Sensor/
+│   └── RoboCore_SMW_SX1262M0/      # *Biblioteca modificada*
+├── docs/
+│   ├── ARCHITECTURE.md             # Design da arquitetura
+│   ├── COMMUNICATION_HANDLERS.md   # Guia de handlers
+│   ├── CONFIG_GUIDE.md             # Configurações
+│   ├── HARDWARE.md                 # Mapeamento de pinos
+│   └── PROTOCOLO.md                # Formato de payload
+├── platformio.ini                  # Configuração do build
+└── README.md                       # Este arquivo
 ```
 
 ---
 
-## 📖 Documentação
+## 📖 Documentação Essencial
 
-| Arquivo | Informações |
-|---------|---------|
-| [**docs/ARCHITECTURE.md**](./docs/ARCHITECTURE.md) | Entender o design |
-| [**docs/HANDLERS.md**](./docs/HANDLERS.md)| Usar/estender handlers |
-| [**docs/HARDWARE.md**](./docs/HARDWARE.md)| Pinos e conexões |
-| [**docs/PROTOCOLO.md**](./docs/PROTOCOLO.md) | Formato de mensagens |
+| Documento | Conteúdo |
+|-----------|----------|
+| [**docs/ARCHITECTURE.md**](./docs/ARCHITECTURE.md) | Diagrama da arquitetura, padrão de handlers, máquina de estados |
+| [**docs/COMMUNICATION_HANDLERS.md**](./docs/COMMUNICATION_HANDLERS.md) | Interface CommunicationHandler, implementações LoRa e Wi-Fi |
+| [**docs/CONFIG_GUIDE.md**](./docs/CONFIG_GUIDE.md) | Todas as configurações de `system_definitions.h` |
+| [**docs/HARDWARE.md**](./docs/HARDWARE.md) | Mapeamento de pinos GPIO |
+| [**docs/PROTOCOLO.md**](./docs/PROTOCOLO.md) | Formato de payload LoRaWAN |
 
 ---
 
-## 👾 Upload do Projeto 
+## 🚀 Quick Start
 
-Instale o Visual Studio Code com a extensão PlatformIO e clone este repositório:
-
-```bash
-git clone https://github.com/Nyfeu/PendioServidor.git
-```
-
-Crie o ficheiro `include/credentials.h` com as chaves LoRaWAN corretas (ver `include/credentials.h.exemplo`).
-
-Use o ambiente PIO (PlatformIO) para compilar e gravar o firmware no hardware.
+### 1. Instalação
 
 ```bash
+# Clone o repositório
 git clone https://github.com/Nyfeu/PendioServidor.git
 cd PendioServidor
-cp include/credentials.example.h include/credentials.h
-# Editar include/credentials.h com suas chaves LoRa
-platformio run                  # Compilar
-platformio run --target upload  # Upload
-platformio device monitor       # Monitor Serial
+
+# Copie as credenciais
+cp include/comm/credentials.example.h include/comm/credentials.h
+
+# Edite com suas chaves LoRaWAN ou credenciais Wi-Fi/Firebase
+nano include/comm/credentials.h
+```
+
+### 2. Configurar Modo de Comunicação
+
+Em `include/system_definitions.h`:
+
+```cpp
+// Para LoRaWAN (padrão):
+// #define COMMUNICATION_MODE_WIFI
+
+// Ou para Wi-Fi + Firebase (protótipo):
+#define COMMUNICATION_MODE_WIFI
+```
+
+### 3. Build e Upload
+
+```bash
+# Compilar
+platformio run
+
+# Upload do firmware
+platformio run --target upload
+
+# Monitor serial em tempo real
+platformio device monitor --baud=115200
 ```
 
 ---
 
+## 🎯 Modos de Operação
+
+### Modo LoRaWAN (Padrão)
+
+- **Uso**: Produção em campo
+- **Conectividade**: Rede LoRaWAN pública
+- **Alcance**: Longo Alcance
+- **Consumo**: Muito baixo
+- **Overhead**: Minimal (payload ~61 bytes)
+
+**Ativar**: Comente a linha `#define COMMUNICATION_MODE_WIFI` em `system_definitions.h`
+
+### Modo Wi-Fi + Firebase
+
+- **Uso**: Produção, desenvolvimento, testes ou prototipagem
+- **Conectividade**: Wi-Fi local (2.4 GHz)
+- **Alcance**: ~100-200 m (indoors)
+- **Consumo**: Alto (Wi-Fi contínuo)
+- **Overhead**: Médio (HTTP + JSON)
+
+**Ativar**: Descomente a linha `#define COMMUNICATION_MODE_WIFI` em `system_definitions.h`
+
+---
+
+## ⚙️ Configuração Principal
+
+Todos os parâmetros se encontram em `include/system_definitions.h`:
+
+```cpp
+// Modo de operação
+#define COMMUNICATION_MODE_WIFI              // Descomente para Wi-Fi + Firebase
+
+// Logging
+#define ENABLE_LOGGING                1      // Ativo
+#define LOG_LEVEL_DEFAULT             1      // 1=INFO, 0=DEBUG
+
+// LoRaWAN (timeouts em ms)
+#define LORA_FIXED_DR                 5      // Data Rate fixo (0-7)
+#define LORA_ADR_ON                   1      // Adaptive Data Rate
+#define JOIN_TIMEOUT_VALUE            10000  // OTAA Join timeout
+#define CFM_TIMEOUT_VALUE             180000 // Confirmação timeout (3 min)
+#define NEXT_MSG_TIMEOUT_VALUE        20000  // Entre mensagens (teste)
+
+// Sensores
+#define SENSOR_AHT_ENABLED            1      // Temperatura/Umidade
+#define SENSOR_BMP_ENABLED            1      // Pressão
+#define SENSOR_SPENDIO_ENABLED        1      // RS485 SPendio
+#define SENSOR_RAIN_ENABLED           1      // Chuva
+#define SENSOR_BATTERY_ENABLED        1      // Bateria
+```
+
+Para configurações detalhadas, consulte [docs/CONFIG_GUIDE.md](./docs/CONFIG_GUIDE.md)
+
+---
+
+## 📊 Estrutura de Dados
+
+### Payload LoRaWAN (61 bytes)
+
+```
+01[SPendio_B:14][SPendio_M:14][SPendio_T:14][Temp:2][Umidade:2][Pressão:5][Chuva:4][Bateria:3][Final:1]
+```
+
+**Exemplo**: `011FB1FF25603A7E1F81F2276F423F1F41F8269F423F212B15BC600260B50`
+
+Detalhes em [docs/PROTOCOLO.md](./docs/PROTOCOLO.md)
+
+---
+
+## 🔌 Credenciais e Segurança
+
+### Arquivo `include/comm/credentials.h` (Git Ignored)
+
+```cpp
+// LoRaWAN
+const char APPEUI[] = "APP EUI do sistema Kore";
+const char APPKEY[] = "APP Key do sistema Kore";
+
+// Wi-Fi + Firebase
+const char WIFI_SSID[] = "NomeSuaRede";
+const char WIFI_PASSWORD[] = "SuaSenha";
+const char FIREBASE_API_KEY[] = "API Key do Firebase";
+const char FIREBASE_DB_URL[] = "projeto.firebaseio.com";
+const char DEVICE_ID[] = "PENDIO_001";
+```
+
+⚠️ **Nunca** faça commit de `credentials.h`. Já está em `.gitignore`. 
+
+
+---
 ## 🧾 Histórico de Instalações e Gravações
 
 | Unidade | Descrição |
@@ -107,43 +258,3 @@ platformio device monitor       # Monitor Serial
 | Pendio 7 | Raia Olimpica USP |
 | Pendio 8 | Raia Olimpica USP |
 | Pendio 9 | Sensor 14/11/2024 |
-
-## 🗝️ Configuração de Credenciais
-
-### Estrutura do Arquivo `credentials.h`
-
-O projeto utiliza um arquivo centralizado para todas as credenciais sensíveis:
-
-```c
-// LoRaWAN (produção)
-const char APPEUI[] = "Seu AppEUI aqui";    // 16 caracteres HEX
-const char APPKEY[] = "Sua AppKey aqui";    // 32 caracteres HEX
-
-// Wi-Fi + Firebase (modo protótipo)
-const char WIFI_SSID[] = "Nome da rede";
-const char WIFI_PASSWORD[] = "Senha da rede";
-const char FIREBASE_API_KEY[] = "Sua API Key";
-const char FIREBASE_DB_URL[] = "seu-projeto.firebaseio.com";
-const char DEVICE_ID[] = "ESP32_PENDIO_01";  // Identificador único
-```
-
-### Passo a Passo para Configurar
-
-1. **Copiar o template:**
-   ```bash
-   cp include/credentials.example.h include/credentials.h
-   ```
-
-2. **Editar `include/credentials.h` com seus valores.**
-
-3. **Verificar `.gitignore`:**
-   Certifique-se que `credentials.h` está na lista de ignorados:
-   ```
-   include/credentials.h
-   ```
-
-### Histórico de Chaves LoRaWAN
-
-O histórico das chaves de produção pode ser consultado em [➡️ docs/CHAVES.md](docs/CHAVES.md).
-
---- 

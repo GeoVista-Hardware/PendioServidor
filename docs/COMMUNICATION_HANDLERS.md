@@ -1,246 +1,395 @@
-# Handlers de Comunicação - Documentação
+# Handlers de Comunicação - Referência Completa
 
 ## Visão Geral
 
-O projeto Pendio implementa um padrão de **handlers intercambiáveis** para comunicação. Isso permite alternar entre diferentes métodos de transmissão (LoRa, Wi-Fi, 4G, etc.) sem modificar a lógica principal do programa.
+O sistema Pendio utiliza a interface `CommunicationHandler` como abstração para diferentes meios de comunicação. Atualmente, estão implementados:
 
-### Benefícios
-- ✅ **Modularidade**: Lógica de comunicação isolada em módulos específicos
-- ✅ **Reutilização**: Mesmo código de aplicação funciona com diferentes meios de comunicação
-- ✅ **Facilidade de teste**: Implementar mock handlers para testes
-- ✅ **Extensibilidade**: Adicionar novos meios de comunicação facilmente
+- **LoRaHandler**: Comunicação via LoRaWAN (SMW_SX1262M0)
+- **WiFiHandler**: Comunicação via Wi-Fi + Firebase Realtime Database
 
-## Arquitetura
+---
 
-```
-┌─────────────────────────────────┐
-│         main.cpp (Aplicação)    │
-│    Lógica de sensores, estados  │
-│                                 │
-│  commHandler->send()            │
-│  commHandler->receive()         │
-└──────────────┬──────────────────┘
-               │
-               ├─── Interface Virtual ───┐
-               │  CommunicationHandler   │
-               └─────────────────────────┤
-               │                         │
-        ┌──────▼────────────────┐        │
-        │   LoRaHandler         │        │
-        │  (Implementação)      │        │
-        └───────────────────────┘        │
-                                         │
-                                    ┌────▼──────────┐
-                                    │  WiFiHandler  │
-                                    │  (Futura)     │
-                                    └───────────────┘
-```
+## Interface Base: CommunicationHandler
 
-## Classe Base: CommunicationHandler
+Definida em `include/comm/CommunicationHandler.h`, a interface fornece uma abstração completa para qualquer meio de comunicação.
 
-Definida em `include/CommunicationHandler.h`, fornece a interface virtual que todos os handlers devem implementar.
-
-### Métodos Principais
+### Enumerações
 
 ```cpp
-class CommunicationHandler {
-public:
-    
-    // Inicialização
-    virtual bool begin() = 0;                              
-    // Inicializa o hardware
-    virtual void end() = 0;                               
-    // Finaliza o hardware
-    
-    // Conexão
-    virtual bool connect() = 0;                           
-    // Conecta à rede/servidor
-    virtual bool isConnected() = 0;                       
-    // Verifica se conectado
-    
-    // Envio
-    virtual SendResult send(uint8_t port, 
-                           const uint8_t* data, 
-                           uint16_t length) = 0;          // Envia dados
-    virtual bool isConfirmed() = 0;                       
-    // Verifica confirmação
-    
-    // Recebimento
-    virtual ReceiveResult receive(DownlinkMessage& msg) = 0; 
-    // Recebe dados
-    
-    // Estado
-    virtual ConnectionState getConnectionState() = 0;     
-    // Obtém estado
-    virtual void process() = 0;                           
-    // Processa eventos
-    virtual const char* getStateString() = 0;             // Descrição do estado
-};
-```
-
-### Enumerações Importantes
-
-```cpp
-// Estados de conexão
 enum class ConnectionState {
-    DISCONNECTED,
-    CONNECTING,
-    CONNECTED,
-    WAITING_CONFIRMATION,
-    ERROR
+    DISCONNECTED,           // Sem conexão
+    CONNECTING,             // Tentando conectar
+    CONNECTED,              // Conectado e pronto
+    WAITING_CONFIRMATION,   // Aguardando ACK
+    ERROR                   // Erro na comunicação
 };
 
-// Resultado de envio
 enum class SendResult {
     SUCCESS,                // Envio aceito
     PENDING,                // Pendente
     FAILED,                 // Falhou
-    NOT_CONNECTED,          // Não conectado
+    NOT_CONNECTED,          // Sem conexão
     INVALID_DATA            // Dados inválidos
 };
 
-// Resultado de recebimento
 enum class ReceiveResult {
     MESSAGE_RECEIVED,       // Mensagem recebida
-    NO_MESSAGE,             // Nenhuma mensagem
-    ERROR                   // Erro
+    NO_MESSAGE,             // Sem mensagens
+    ERROR                   // Erro ao ler
+};
+
+struct DownlinkMessage {
+    uint8_t port;           // Porta de recebimento (1-223)
+    uint8_t data[256];      // Dados recebidos
+    uint16_t length;        // Tamanho dos dados
+    uint32_t timestamp;     // Timestamp do recebimento
 };
 ```
 
-## Usando na Aplicação Principal
-
-### Instanciação (em main.cpp)
+### Interface de Métodos
 
 ```cpp
-// Configurar parâmetros
-LoRaConfig loraConfig = {
+class CommunicationHandler {
+public:
+    virtual ~CommunicationHandler() = default;
+    
+    // Inicialização e finalização
+    virtual bool begin() = 0;                           // Inicializar
+    virtual void end() = 0;                             // Finalizar
+    
+    // Conectividade
+    virtual bool connect() = 0;                         // Conectar
+    virtual bool isConnected() = 0;                     // Verificar conexão
+    virtual ConnectionState getConnectionState() = 0;   // Obter estado
+    
+    // Envio e confirmação
+    virtual SendResult send(uint8_t port, 
+                           const uint8_t* data, 
+                           uint16_t length) = 0;        // Enviar dados
+    virtual bool isConfirmed() = 0;                     // Verificar ACK
+    
+    // Recebimento
+    virtual ReceiveResult receive(DownlinkMessage& msg) = 0;  // Receber
+    
+    // Processamento
+    virtual void process() = 0;                         // Processar em background
+    
+    // Informações
+    virtual const char* getStateString() = 0;          // Descrição do estado
+};
+```
+
+---
+
+## LoRaHandler - Comunicação LoRaWAN
+
+### Localização
+
+- **Header**: `include/comm/LoRaHandler.h`
+- **Implementação**: `src/comm/LoRaHandler.cpp`
+
+### Características
+
+| Aspecto | Detalhes |
+|---------|----------|
+| **Hardware** | Robocore SMW_SX1262M0 (SX1262) |
+| **Interface** | UART1 (GPIO5/RX, GPIO23/TX) |
+| **Protocolo** | LoRaWAN OTAA (Over The Air Activation) |
+| **Confirmação** | CFM (Uplink Confirmed) |
+| **ADR** | Suportado (Adaptive Data Rate) |
+| **Data Rates** | 0-7 (SF12 até SF7) |
+| **Status** | ✅ 100% implementado |
+
+### Configuração
+
+```cpp
+struct LoRaConfig {
+    HardwareSerial* serial;           // &loraSerial
+    const uint8_t* appEUI;            // 8 bytes da credencial
+    const uint8_t* appKey;            // 16 bytes da credencial
+    bool useConfirmation;             // false = não confirmado, true = confirmado
+    bool useADR;                      // true = ADR automático
+    uint8_t fixedDR;                  // 0-7 (se ADR = false)
+    unsigned long joinTimeout;        // Ex: 10000 ms (10s)
+    unsigned long confirmTimeout;     // Ex: 180000 ms (3 min)
+    uint8_t maxRetries;               // Ex: 3 tentativas
+};
+```
+
+### Exemplo de Uso
+
+```cpp
+#include "comm/LoRaHandler.h"
+#include "comm/credentials.h"
+
+// Criar serial para LoRa
+HardwareSerial loraSerial(1);
+
+// Configurar
+LoRaConfig config = {
     .serial = &loraSerial,
     .appEUI = (const uint8_t*)APPEUI,
     .appKey = (const uint8_t*)APPKEY,
     .useConfirmation = false,
-    .useADR = LORA_ADR_ON,
-    .fixedDR = LORA_FIXED_DR,
-    .joinTimeout = JOIN_TIMEOUT_VALUE,
-    .confirmTimeout = CFM_TIMEOUT_VALUE,
+    .useADR = true,
+    .fixedDR = 5,
+    .joinTimeout = 10000,
+    .confirmTimeout = 180000,
     .maxRetries = 3
 };
 
-// Criar instância (polimorfa)
-CommunicationHandler* commHandler = new LoRaHandler(loraConfig);
+// Instanciar
+CommunicationHandler* commHandler = new LoRaHandler(config);
 
-// Ou para Wi-Fi:
-// WiFiConfig wifiConfig = { ... };
-// CommunicationHandler* commHandler = new WiFiHandler(wifiConfig);
-```
-
-### Inicialização
-
-```cpp
-if (!commHandler->begin()) {
-    Serial.println(F("Falha ao inicializar comunicação"));
-    while(1) delay(1000);
-}
-
-// Tentar conectar
-if (!commHandler->connect()) {
-    Serial.println(F("Falha ao conectar"));
-}
-```
-
-### Envio de Dados
-
-```cpp
-SendResult result = commHandler->send(1, data, length);
-
-switch(result) {
-    case SendResult::SUCCESS:
-        Serial.println("Envio aceito");
-        break;
-    case SendResult::NOT_CONNECTED:
-        Serial.println("Não conectado");
-        break;
-    case SendResult::INVALID_DATA:
-        Serial.println("Dados inválidos");
-        break;
-    case SendResult::FAILED:
-        Serial.println("Envio recusado");
-        break;
-    case SendResult::PENDING:
-        Serial.println("Envio pendente");
-        break;
-}
-```
-
-### Verificação de Confirmação
-
-```cpp
-if (commHandler->isConfirmed()) {
-    Serial.println("Mensagem confirmada");
-} else {
-    Serial.println("Aguardando confirmação...");
-}
-```
-
-### Recebimento de Dados
-
-```cpp
-DownlinkMessage msg;
-ReceiveResult result = commHandler->receive(msg);
-
-if (result == ReceiveResult::MESSAGE_RECEIVED) {
-    Serial.print("Mensagem na porta: ");
-    Serial.println(msg.port);
-    Serial.print("Tamanho: ");
-    Serial.println(msg.length);
+// Usar em setup()
+void setup() {
+    loraSerial.begin(115200, SERIAL_8N1, 5, 23);  // RX, TX
     
-    // Processar dados
-    for (int i = 0; i < msg.length; i++) {
-        Serial.println(msg.data[i]);
+    if (!commHandler->begin()) {
+        Serial.println("Erro ao inicializar LoRa");
+        while(1) delay(1000);
+    }
+    
+    if (!commHandler->connect()) {
+        Serial.println("Erro ao conectar (OTAA Join failed)");
+    }
+}
+
+// Usar em loop()
+void loop() {
+    commHandler->process();  // Processar eventos LoRa
+    
+    if (commHandler->isConnected()) {
+        uint8_t payload[] = {0x01, 0x02, 0x03};
+        SendResult result = commHandler->send(1, payload, 3);
+        
+        if (result == SendResult::SUCCESS) {
+            Serial.println("Packet enfileirado");
+            
+            // Aguardar confirmação
+            unsigned long start = millis();
+            while (millis() - start < 6000) {
+                commHandler->process();
+                
+                if (commHandler->isConfirmed()) {
+                    Serial.println("ACK recebido!");
+                    break;
+                }
+                delay(100);
+            }
+        }
+    }
+    
+    delay(100);
+}
+```
+
+### Métodos Adicionais
+
+```cpp
+// Obter DevEUI do módulo
+bool getDevEUI(char* buffer);  // buffer mínimo 16 bytes
+
+// Alterar configuração em runtime
+bool setConfirmation(bool enabled);
+bool setADR(bool enabled);
+bool setDataRate(uint8_t dr);
+```
+
+---
+
+## WiFiHandler - Comunicação Wi-Fi + Firebase
+
+### Localização
+
+- **Header**: `include/comm/WiFiHandler.h`
+- **Implementação**: `src/comm/WiFiHandler.cpp`
+
+### Características
+
+| Aspecto | Detalhes |
+|---------|----------|
+| **Hardware** | ESP32 built-in Wi-Fi |
+| **Interface** | Wi-Fi 802.11 b/g/n (2.4 GHz) |
+| **Backend** | Firebase Realtime Database |
+| **Protocolo** | HTTPS/REST API |
+| **Confirmação** | HTTP 200 OK |
+| **Encoding** | Base64 |
+| **Status** | ✅ 100% implementado |
+
+### Configuração
+
+```cpp
+struct WiFiConfig {
+    const char* ssid;               // Nome da rede Wi-Fi
+    const char* password;           // Senha Wi-Fi
+    const char* apiKey;             // Firebase API Key
+    const char* databaseUrl;        // URL do Firebase (ex: "seu-projeto.firebaseio.com")
+    const char* deviceId;           // Identificador único (ex: "PENDIO_001")
+    unsigned long connectTimeout;   // Timeout de conexão (ms)
+};
+```
+
+### Exemplo de Uso
+
+```cpp
+#include "comm/WiFiHandler.h"
+#include "comm/credentials.h"
+
+// Configurar
+WiFiConfig config = {
+    .ssid = WIFI_SSID,
+    .password = WIFI_PASSWORD,
+    .apiKey = FIREBASE_API_KEY,
+    .databaseUrl = FIREBASE_DB_URL,
+    .deviceId = DEVICE_ID,
+    .connectTimeout = 30000
+};
+
+// Instanciar
+CommunicationHandler* commHandler = new WiFiHandler(config);
+
+// Usar em setup()
+void setup() {
+    if (!commHandler->begin()) {
+        Serial.println("Erro ao inicializar Wi-Fi");
+        while(1) delay(1000);
+    }
+    
+    if (!commHandler->connect()) {
+        Serial.println("Erro ao conectar ao Wi-Fi");
+    }
+}
+
+// Usar em loop()
+void loop() {
+    commHandler->process();
+    
+    if (commHandler->isConnected()) {
+        uint8_t payload[] = {0x01, 0x02, 0x03};
+        SendResult result = commHandler->send(1, payload, 3);
+        
+        if (result == SendResult::SUCCESS) {
+            Serial.println("Dados enviados ao Firebase");
+            
+            if (commHandler->isConfirmed()) {
+                Serial.println("HTTP 200 OK");
+            }
+        }
+    }
+    
+    // Verificar downlinks
+    DownlinkMessage msg;
+    if (commHandler->receive(msg) == ReceiveResult::MESSAGE_RECEIVED) {
+        Serial.printf("Downlink recebido na porta %d\n", msg.port);
+        // Processar msg.data[0..msg.length-1]
+    }
+    
+    delay(100);
+}
+```
+
+### Estrutura de Dados no Firebase
+
+Os dados são armazenados em:
+
+```
+/devices/{deviceId}/uplinks/
+├─ {timestamp1}
+│  ├─ port: 1
+│  ├─ payload: "010AF3..." (Base64 do payload)
+│  └─ timestamp: {unix_timestamp}
+├─ {timestamp2}
+│  └─ ...
+└─ ...
+```
+
+---
+
+## Seleção de Handler em main.cpp
+
+```cpp
+#include "comm/CommunicationHandler.h"
+#include "comm/LoRaHandler.h"
+#include "comm/WiFiHandler.h"
+#include "comm/credentials.h"
+
+CommunicationHandler* commHandler = nullptr;
+
+void setup() {
+    Serial.begin(115200);
+    
+    #ifdef COMMUNICATION_MODE_WIFI
+        // Modo Wi-Fi + Firebase
+        WiFiConfig wifiConfig = {
+            .ssid = WIFI_SSID,
+            .password = WIFI_PASSWORD,
+            .apiKey = FIREBASE_API_KEY,
+            .databaseUrl = FIREBASE_DB_URL,
+            .deviceId = DEVICE_ID,
+            .connectTimeout = 30000
+        };
+        commHandler = new WiFiHandler(wifiConfig);
+    
+    #else
+        // Modo LoRaWAN (padrão)
+        HardwareSerial loraSerial(1);
+        LoRaConfig loraConfig = {
+            .serial = &loraSerial,
+            .appEUI = (const uint8_t*)APPEUI,
+            .appKey = (const uint8_t*)APPKEY,
+            .useConfirmation = false,
+            .useADR = LORA_ADR_ON,
+            .fixedDR = LORA_FIXED_DR,
+            .joinTimeout = JOIN_TIMEOUT_VALUE,
+            .confirmTimeout = CFM_TIMEOUT_VALUE,
+            .maxRetries = 3
+        };
+        commHandler = new LoRaHandler(loraConfig);
+    #endif
+    
+    // O resto do código é agnóstico!
+    if (!commHandler->begin()) {
+        Serial.println("Erro ao inicializar comunicação");
+        while(1) delay(1000);
+    }
+    
+    if (!commHandler->connect()) {
+        Serial.println("Erro ao conectar");
     }
 }
 ```
 
-### Processamento Cíclico
-
-```cpp
-void loop() {
-    // ... lógica de aplicação ...
-    
-    // Processar eventos de comunicação
-    commHandler->process();
-    
-    // Verificar estado
-    Serial.println(commHandler->getStateString());
-}
-```
+---
 
 ## Implementando um Novo Handler
 
-### Passo 1: Criar o Header (.h)
+### Passo 1: Criar Header
 
 ```cpp
-#ifndef _MY_COMM_HANDLER_H
-#define _MY_COMM_HANDLER_H
+// include/comm/MeuHandler.h
+#ifndef _MEU_HANDLER_H
+#define _MEU_HANDLER_H
 
 #include "CommunicationHandler.h"
 
-struct MyCommConfig {
-    // Parâmetros específicos do seu handler
+struct MeuConfig {
+    // Configurações específicas
     unsigned long timeout;
-    // ...
+    const char* servidor;
 };
 
-class MyCommHandler : public CommunicationHandler {
+class MeuHandler : public CommunicationHandler {
 private:
-    MyCommConfig config;
+    MeuConfig config;
     ConnectionState currentState;
-    bool confirmed;
-    DownlinkMessage lastDownlink;
-
-public:
-    explicit MyCommHandler(const MyCommConfig& cfg);
+    bool _isConfirmed;
+    DownlinkMessage lastMessage;
     
-    // Implementar todos os métodos virtuais
+public:
+    explicit MeuHandler(const MeuConfig& cfg);
+    ~MeuHandler() override = default;
+    
     bool begin() override;
     void end() override;
     bool connect() override;
@@ -251,7 +400,7 @@ public:
     ConnectionState getConnectionState() override;
     void process() override;
     const char* getStateString() override;
-
+    
 private:
     void updateState();
 };
@@ -259,167 +408,125 @@ private:
 #endif
 ```
 
-### Passo 2: Implementar o .cpp
+### Passo 2: Implementar CPP
 
 ```cpp
-#include "MyCommHandler.h"
+// src/comm/MeuHandler.cpp
+#include "comm/MeuHandler.h"
+#include "utils/Logger.h"
 
-MyCommHandler::MyCommHandler(const MyCommConfig& cfg)
+MeuHandler::MeuHandler(const MeuConfig& cfg)
     : config(cfg),
       currentState(ConnectionState::DISCONNECTED),
-      confirmed(false) {
-    // Inicializar lastDownlink
-    memset(lastDownlink.data, 0, sizeof(lastDownlink.data));
+      _isConfirmed(false) {
+    memset(&lastMessage, 0, sizeof(lastMessage));
 }
 
-bool MyCommHandler::begin() {
-    Serial.println(F("[MyComm] Inicializando..."));
-    // Implementar inicialização
+bool MeuHandler::begin() {
+    LOGI("MeuHandler", "Inicializando...");
     currentState = ConnectionState::DISCONNECTED;
     return true;
 }
 
-// ... Implementar demais métodos ...
-```
-
-### Passo 3: Usar na Aplicação
-
-```cpp
-#include "MyCommHandler.h"
-
-MyCommConfig config = { ... };
-CommunicationHandler* commHandler = new MyCommHandler(config);
-```
-
-## Exemplo Prático: Alternância LoRa ↔ Wi-Fi
-
-```cpp
-// Definir qual meio usar
-#define USE_LORA 1
-// #define USE_WIFI 1
-
-void setup() {
-    #ifdef USE_LORA
-        LoRaConfig loraConfig = { /* ... */ };
-        commHandler = new LoRaHandler(loraConfig);
-    #endif
-    
-    #ifdef USE_WIFI
-        WiFiConfig wifiConfig = { /* ... */ };
-        commHandler = new WiFiHandler(wifiConfig);
-    #endif
-    
-    // Resto do código é idêntico!
-    commHandler->begin();
-    commHandler->connect();
+void MeuHandler::end() {
+    LOGI("MeuHandler", "Finalizando");
+    currentState = ConnectionState::DISCONNECTED;
 }
 
-void loop() {
-    // Código funciona com qualquer handler
-    if (commHandler->isConnected()) {
-        commHandler->send(1, data, length);
-        if (commHandler->isConfirmed()) {
-            // Envio confirmado
-        }
+bool MeuHandler::connect() {
+    LOGI("MeuHandler", "Conectando a %s...", config.servidor);
+    currentState = ConnectionState::CONNECTED;
+    return true;
+}
+
+bool MeuHandler::isConnected() {
+    return currentState == ConnectionState::CONNECTED;
+}
+
+SendResult MeuHandler::send(uint8_t port, const uint8_t* data, uint16_t length) {
+    if (!isConnected()) {
+        return SendResult::NOT_CONNECTED;
+    }
+    
+    LOGI("MeuHandler", "Enviando %d bytes na porta %d", length, port);
+    _isConfirmed = true;
+    return SendResult::SUCCESS;
+}
+
+bool MeuHandler::isConfirmed() {
+    return _isConfirmed;
+}
+
+ReceiveResult MeuHandler::receive(DownlinkMessage& message) {
+    return ReceiveResult::NO_MESSAGE;
+}
+
+ConnectionState MeuHandler::getConnectionState() {
+    return currentState;
+}
+
+void MeuHandler::process() {
+    // Processar eventos
+}
+
+const char* MeuHandler::getStateString() {
+    switch(currentState) {
+        case ConnectionState::DISCONNECTED: return "DESCONECTADO";
+        case ConnectionState::CONNECTING: return "CONECTANDO";
+        case ConnectionState::CONNECTED: return "CONECTADO";
+        case ConnectionState::WAITING_CONFIRMATION: return "AGUARDANDO CFM";
+        case ConnectionState::ERROR: return "ERRO";
+        default: return "DESCONHECIDO";
     }
 }
-```
 
-## Handlers Disponíveis
-
-### LoRaHandler (`include/LoRaHandler.h`)
-- **Arquivo de implementação**: `src/LoRaHandler.cpp`
-- **Hardware**: SMW_SX1262M0 via Serial UART
-- **Características**:
-  - OTAA Join
-  - Confirmação de mensagens (CFM)
-  - Adaptive Data Rate (ADR)
-  - Data Rate fixo configurável
-
-### WiFiHandler (`include/WiFiHandler.h`)
-- **Arquivo de implementação**: `src/WiFiHandler.cpp`
-- **Hardware**: ESP32 built-in Wi-Fi
-- **Status**: Estrutura de exemplo (necessita completar implementação)
-- **Características planejadas**:
-  - Conexão SSID/Password
-  - HTTP POST/GET
-  - TCP direto
-
-## Tratamento de Erros
-
-Cada handler gerencia seu próprio estado e erros através de:
-
-1. **ConnectionState**: Indica estado geral da conexão
-2. **SendResult**: Indica resultado de cada tentativa de envio
-3. **ReceiveResult**: Indica resultado de cada tentativa de recebimento
-
-```cpp
-// Exemplo com tratamento robusto
-ConnectionState state = commHandler->getConnectionState();
-if (state == ConnectionState::ERROR) {
-    Serial.println("Erro na comunicação!");
-    delay(5000);
-    commHandler->connect();  // Tentar reconectar
+void MeuHandler::updateState() {
+    // Lógica de atualização de estado
 }
 ```
 
-## Estrutura de Diretórios
+### Passo 3: Usar em main.cpp
 
+```cpp
+#ifdef COMMUNICATION_MODE_MEU
+    MeuConfig cfg = {
+        .timeout = 5000,
+        .servidor = "meu.servidor.com"
+    };
+    commHandler = new MeuHandler(cfg);
+#endif
 ```
-include/
-├── CommunicationHandler.h       ← Interface abstrata
-├── LoRaHandler.h               ← Handler LoRa
-└── WiFiHandler.h               ← Handler Wi-Fi
-
-src/
-├── main.cpp                    ← Aplicação principal (agnóstica)
-├── LoRaHandler.cpp            ← Implementação LoRa
-└── WiFiHandler.cpp            ← Implementação Wi-Fi
-```
-
-## Boas Práticas
-
-1. **Sempre verificar conexão antes de enviar**
-   ```cpp
-   if (commHandler->isConnected()) {
-       commHandler->send(...);
-   }
-   ```
-
-2. **Processar eventos regularmente**
-   ```cpp
-   void loop() {
-       commHandler->process();  // Chamar em todo ciclo
-       // ... resto da lógica ...
-   }
-   ```
-
-3. **Usar enumerações para estados**
-   ```cpp
-   if (result == SendResult::SUCCESS) { ... }
-   // Melhor que: if (result == 0) { ... }
-   ```
-
-4. **Não fazer suposições sobre timing**
-   ```cpp
-   // ❌ ERRADO: Assume resposta imediata
-   commHandler->send(...);
-   Serial.println(commHandler->isConfirmed());
-   
-   // ✅ CORRETO: Aguarda confirmação em ciclos subsequentes
-   if (commHandler->send(...) == SendResult::SUCCESS) {
-       state = WAITING_CONFIRMATION;
-   }
-   ```
-
-## Suporte e Contribuição
-
-Para adicionar um novo método de comunicação:
-
-1. Criar header e implementação seguindo o padrão
-2. Implementar todos os métodos virtuais
-3. Atualizar este documento
-4. Testar com código existente (sem mudanças na aplicação)
 
 ---
 
+## Tratamento de Erros
+
+### Padrão Recomendado
+
+```cpp
+ConnectionState state = commHandler->getConnectionState();
+
+if (state == ConnectionState::ERROR) {
+    LOGW("Main", "Erro na comunicação: %s", commHandler->getStateString());
+    
+    // Tentar reconectar
+    if (commHandler->connect()) {
+        LOGI("Main", "Reconectado com sucesso");
+    } else {
+        LOGE("Main", "Falha ao reconectar");
+    }
+} else if (state == ConnectionState::CONNECTED) {
+    // Enviar dados
+} else if (state == ConnectionState::WAITING_CONFIRMATION) {
+    // Aguardar confirmação
+}
+```
+
+---
+
+## Recursos Adicionais
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - Diagrama da arquitetura
+- [CONFIG_GUIDE.md](./CONFIG_GUIDE.md) - Configurações do sistema
+
+---

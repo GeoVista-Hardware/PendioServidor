@@ -1,195 +1,281 @@
 # ⚙️ Guia de Configuração - Pendio
 
-Referência completa das configurações do sistema.
+Referência completa das configurações do sistema Pendio definidas em `include/system_definitions.h`.
 
 ---
 
 ## 📋 Localização das Configurações
 
 ```
-include/config.h                    ← PRINCIPAL (edite aqui)
-include/hardware_definitions.h  ← Hardware (raramente muda)
-include/credentials.h               ← AppEUI, AppKey
-platformio.ini                      ← Ambiente de build
+include/system_definitions.h      ← PRINCIPAL (edite aqui)
+include/hardware_definitions.h    ← Hardware (raramente muda)
+include/comm/credentials.h        ← AppEUI, AppKey, Firebase (git ignored)
+platformio.ini                    ← Ambiente de build
 ```
 
 ---
 
-## 🎯 Configurações Principais (config.h)
+## 🎯 Seção 1: Modo de Operação
 
-### Logging
+### Selecionar Comunicação
 
 ```cpp
-ENABLE_LOGGING      1              // Ativo
-LOG_LEVEL_DEFAULT   LOG_LEVEL_INFO // INFO, WARN, ERROR, DEBUG
-SERIAL_BAUDRATE     115200         // Não altere (padrão ESP32)
+// Descomente para ativar modo Wi-Fi + Firebase (prototipagem)
+// Comente para usar LoRaWAN (padrão - produção)
+#define COMMUNICATION_MODE_WIFI
 ```
 
-**Resultado**:
+| Modo | Config | Uso | Consumo |
+|------|--------|-----|---------|
+| **LoRaWAN** | Comentado | Produção em campo | Muito baixo |
+| **Wi-Fi + Firebase** | Descomentado | Desenvolvimento/Testes | Alto |
+
+---
+
+## 📊 Seção 2: Logging
+
+```cpp
+// Ativar ou desativar logging
+#define ENABLE_LOGGING              1       // 1=ativo, 0=inativo
+
+// Nível padrão de logging
+#define LOG_LEVEL_DEFAULT           LOG_LEVEL_INFO
+// Valores: LOG_LEVEL_DEBUG (0), LOG_LEVEL_INFO (1), 
+//          LOG_LEVEL_WARN (2), LOG_LEVEL_ERROR (3)
+```
+
+### Exemplo de Output
+
 ```
 [00:01:23.456] [INFO][SYSTEM] Sistema iniciado
 [00:02:45.789] [WARN][COMM] Tentando rejoin...
+[00:03:12.345] [ERROR][SENSOR] Erro ao ler AHT10
 ```
 
 ---
 
-### LoRaWAN - Timeouts
+## 🔌 Seção 3: LoRaWAN - Timeouts
 
-| Config | Valor | Nota |
-|--------|-------|------|
-| `JOIN_TIMEOUT_VALUE` | 10000 ms | OTAA Join |
-| `CFM_TIMEOUT_VALUE` | 180000 ms | Aguardar ACK (3 min) |
-| `NEXT_MSG_TIMEOUT_VALUE` | 20000 ms | Entre mensagens (teste) |
+| Configuração | Valor | Unidade | Descrição |
+|--------------|-------|---------|-----------|
+| `JOIN_TIMEOUT_VALUE` | 10000 | ms | Timeout para OTAA Join |
+| `CFM_TIMEOUT_VALUE` | 180000 | ms | Aguardar ACK (3 minutos) |
+| `NEXT_MSG_TIMEOUT_VALUE` | 20000 | ms | Intervalo entre mensagens |
 
-**Cenários**:
-- **Teste** (desenvolvimento): 20s entre mensagens
-- **Produção** (duty cycle): 1800s (30 min)
+### Cenários Comuns
+
+#### Teste/Desenvolvimento
+```cpp
+#define JOIN_TIMEOUT_VALUE      10000       // 10s
+#define CFM_TIMEOUT_VALUE       6000        // 6s
+#define NEXT_MSG_TIMEOUT_VALUE  20000       // 20s entre mensagens
+```
+✅ Join rápido, testes frequentes
+
+#### Produção/Campo
+```cpp
+#define JOIN_TIMEOUT_VALUE      30000       // 30s
+#define CFM_TIMEOUT_VALUE       180000      // 3 min (respire de bateria)
+#define NEXT_MSG_TIMEOUT_VALUE  1800000     // 30 min (duty cycle)
+```
+✅ Economiza bateria, respeita duty cycle (1% airtime)
+
+---
+
+## 📡 Seção 4: LoRaWAN - Transmissão
 
 ```cpp
-// Para produção, comentar/descomentar:
-// #define NEXT_MSG_TIMEOUT_VALUE   20000      // Teste
-#define NEXT_MSG_TIMEOUT_VALUE   1800000     // Produção
+// Data Rate fixo (0-7), se ADR desabilitado
+#define LORA_FIXED_DR                 5
+
+// Usar Adaptive Data Rate
+#define LORA_ADR_ON                   1       // 1=ativo, 0=inativo
+
+// Usar confirmação (pedir ACK ao gateway)
+#define LORA_USE_CONFIRMATION         0       // 1=ativo, 0=inativo
+
+// Máximo de retentativas de envio (NACK)
+#define LORA_MAX_NACK_RETRIES         9
 ```
 
----
+### Data Rates Explicado
 
-### LoRaWAN - Transmissão
+| DR | SF | BW | Throughput | Alcance | Velocidade |
+|----|----|----|-----------|---------|-----------|
+| 0 | 12 | 125 | Mínimo | **Máximo** | Lenta |
+| 2 | 10 | 125 | Médio | Bom | Médio |
+| **5** | **7** | **125** | **Alto** | Mínimo | **Rápida** |
+| 7 | 7 | 250 | Máximo | Mínimo | Máxima |
 
-| Config | Valor | Significado |
-|--------|-------|-------------|
-| `LORA_FIXED_DR` | 0-12 | Data Rate (se ADR off) |
-| `LORA_ADR_ON` | 1 | Adaptive Data Rate |
-| `LORA_USE_CONFIRMATION` | 0 | Mensagens confirmadas |
-| `LORA_MAX_PAYLOAD` | 100 | Tamanho max [bytes] |
-| `LORA_MAX_NACK_RETRIES` | 9 | Retentativas |
+**Recomendação**: Use DR=5 para testes locais, DR=0-2 para campo.
 
-**Data Rates**:
-```
-DR 0  → SF12, BW=125kHz  (melhor alcance, mais lento)
-DR 2  → SF10, BW=125kHz  (padrão)
-DR 5  → SF7,  BW=125kHz  (mais rápido, menor alcance)
-```
-
----
-
-### Sensores
+### Confirmação (CFM)
 
 ```cpp
-SENSOR_AHT_ENABLED      1    // Temperatura/Umidade
-SENSOR_BMP_ENABLED      1    // Pressão
-SENSOR_SPENDIO_ENABLED  1    // RS485
-SENSOR_RAIN_ENABLED     1    // Chuva
-SENSOR_BATTERY_ENABLED  1    // Bateria
+#define LORA_USE_CONFIRMATION  0    // Não confirmado (mais rápido)
+#define LORA_USE_CONFIRMATION  1    // Confirmado (garante entrega)
 ```
 
-**Desabilitar sensor**: Mude para `0` se não estiver instalado.
+| Config | Vantagem | Desvantagem |
+|--------|----------|------------|
+| **CFM=0** | Rápido, economiza bateria | Pode perder pacote |
+| **CFM=1** | Garantia de entrega | Mais lento, mais consumo |
 
 ---
 
-### Pinos (Hardware)
+## 🌡️ Seção 5: Sensores
 
 ```cpp
-PIN_LED              2        // ESP32 GPIO2 (LED interno)
-LORA_SERIAL_PORT     1        // Serial1 (TX=GPIO17, RX=GPIO16)
-LORA_TX_POWER        20       // dBm (2-20)
+// Habilitar ou desabilitar sensores instalados
+#define SENSOR_AHT_ENABLED          1       // Temperatura/Umidade
+#define SENSOR_BMP_ENABLED          1       // Pressão
+#define SENSOR_SPENDIO_ENABLED      1       // Sensores RS485
+#define SENSOR_RAIN_ENABLED         1       // Pluviômetro
+#define SENSOR_BATTERY_ENABLED      1       // Monitor de bateria
 ```
 
-**Atenção**: Não altere sem revisar `docs/HARDWARE.md`.
+**Se sensor não está instalado**: Mude para `0` para evitar erros de inicialização.
 
 ---
 
-## 🔧 Casos Comuns de Ajuste
-
-### 1️⃣ Modo Teste (Desenvolvimento)
+## 📌 Seção 6: Pinos e Hardware
 
 ```cpp
-ENABLE_LOGGING             1
-LOG_LEVEL_DEFAULT          LOG_LEVEL_DEBUG
-NEXT_MSG_TIMEOUT_VALUE     20000         // 20s
-LORA_ADR_ON                1
-LORA_USE_CONFIRMATION      0             // Sem ACK
-DEBUG_MODE                 1
+// LED de status (GPIO2 é o LED interno do Wemos)
+#define PIN_LED                     2
+
+// Serial para comunicação com LoRa (UART1)
+#define LORA_SERIAL_PORT            1
+// RX=GPIO5, TX=GPIO23 (configurados em hardware_definitions.h)
+
+// Potência TX do módulo LoRa
+#define LORA_TX_POWER               20      // dBm (2-20)
 ```
 
-✅ Logs verbosos, mensagens frequentes, sem confirmação.
+**Não altere sem consultar [docs/HARDWARE.md](./HARDWARE.md)**
 
 ---
 
-### 2️⃣ Modo Produção (Campo)
+## 🎓 Casos Práticos de Ajuste
+
+### 1️⃣ Modo Teste (Desenvolvimento Local)
 
 ```cpp
-ENABLE_LOGGING             1
-LOG_LEVEL_DEFAULT          LOG_LEVEL_INFO
-NEXT_MSG_TIMEOUT_VALUE     1800000       // 30min
-LORA_ADR_ON                1
-LORA_USE_CONFIRMATION      1             // Com ACK
-DEBUG_MODE                 0
+#define COMMUNICATION_MODE_WIFI         // Use Wi-Fi
+#define ENABLE_LOGGING              1
+#define LOG_LEVEL_DEFAULT           LOG_LEVEL_DEBUG
+
+#define LORA_FIXED_DR               5   // DR rápido
+#define LORA_ADR_ON                 1
+#define LORA_USE_CONFIRMATION       0   // Sem CFM
+#define NEXT_MSG_TIMEOUT_VALUE      20000   // 20s
 ```
 
-✅ Logs econômicos, mensagens espaçadas, com confirmação.
+✅ Muitos logs, mensagens frequentes, sem confirmação
 
 ---
 
-### 3️⃣ Sensor Específico Ausente
+### 2️⃣ Modo Produção (Wi-Fi + Firebase)
+
+```cpp
+#define COMMUNICATION_MODE_WIFI         // ✅ Use este modo
+#define ENABLE_LOGGING              1
+#define LOG_LEVEL_DEFAULT           LOG_LEVEL_INFO
+
+// Configurações LoRa são ignoradas neste modo
+```
+
+✅ Dados em tempo real no Firebase, testes rápidos
+
+---
+
+### 3️⃣ Modo Produção (Campo com LoRa)
+
+```cpp
+// #define COMMUNICATION_MODE_WIFI   // ❌ Comentado
+#define ENABLE_LOGGING              1
+#define LOG_LEVEL_DEFAULT           LOG_LEVEL_INFO
+
+#define LORA_FIXED_DR               0    // DR longo alcance
+#define LORA_ADR_ON                 1    // ADR automático
+#define LORA_USE_CONFIRMATION       1    // Confirmar entrega
+#define CFM_TIMEOUT_VALUE           180000  // 3 min
+#define NEXT_MSG_TIMEOUT_VALUE      1800000 // 30 min
+#define LORA_MAX_NACK_RETRIES       9
+```
+
+✅ Máxima economia de bateria, confirmação de entrega, logs mínimos
+
+---
+
+### 4️⃣ Sensor Específico Ausente
 
 Se o **BMP280 não está instalado**:
 
 ```cpp
-SENSOR_BMP_ENABLED         0
+#define SENSOR_BMP_ENABLED          0   // Desabilitar
 ```
 
-O sistema ignora erros de inicialização do sensor.
+O sistema ignora erros de inicialização e continua funcionando.
 
 ---
 
-### 4️⃣ Aumentar Comunicação (CFM)
-
-Se precisa garantir entrega:
+### 5️⃣ Aumentar Confirmação (Garantia de Entrega)
 
 ```cpp
-LORA_USE_CONFIRMATION      1        // Pedir ACK
-CFM_TIMEOUT_VALUE          180000   // Aguardar 3 min
-LORA_MAX_NACK_RETRIES      9        // 9 tentativas
+#define LORA_USE_CONFIRMATION       1        // Pedir ACK
+#define CFM_TIMEOUT_VALUE           180000   // Aguardar 3 min
+#define LORA_MAX_NACK_RETRIES       9        // 9 tentativas
 ```
 
-⚠️ Aumenta consumo de energia e uso de airtime.
-
----
-
-## 📊 Comparação: Teste vs Produção
-
-| Aspecto | Teste | Produção |
-|---------|-------|----------|
-| Log Level | DEBUG | INFO |
-| Intervalo Mensagens | 20s | 1800s (30min) |
-| CFM (ACK) | Não | Sim |
-| Watchdog | Desabilitado | Habilitado |
-| TX Power | 20 dBm | 14-20 dBm |
-
----
-
-## ✅ Validação
-
-Ao compilar, o sistema valida:
-
-```cpp
-#if LORA_FIXED_DR < 0 || LORA_FIXED_DR > 12
-    #error "LORA_FIXED_DR inválido"
-#endif
-```
-
-**Se erro**: Ajuste `config.h` e recompile.
+⚠️ Aumenta consumo de energia. Use apenas se crítico.
 
 ---
 
 ## 🔑 Credenciais (credentials.h)
 
-**Nunca** coloque credenciais em `config.h`. Use arquivo separado:
+**Nunca** coloque credenciais em `system_definitions.h`. Use arquivo separado:
 
 ```cpp
-// include/credentials.h
+// include/comm/credentials.h (git ignored)
+
+// LoRaWAN
 const char APPEUI[] = "26e7cc9af428bec1";
 const char APPKEY[] = "cfeebad46ac8638d69fa23c5789926f3";
+
+// Wi-Fi + Firebase (opcional)
+const char WIFI_SSID[] = "minha_rede";
+const char WIFI_PASSWORD[] = "minha_senha";
+const char FIREBASE_API_KEY[] = "AIzaSyD...";
+const char FIREBASE_DB_URL[] = "meu-projeto.firebaseio.com";
+const char DEVICE_ID[] = "PENDIO_001";
 ```
+
+---
+
+## ✅ Validação de Configuração
+
+Ao compilar, o sistema valida automaticamente:
+
+```cpp
+#if LORA_FIXED_DR < 0 || LORA_FIXED_DR > 7
+    #error "LORA_FIXED_DR deve estar entre 0 e 7"
+#endif
+
+#if CFM_TIMEOUT_VALUE < 1000
+    #error "CFM_TIMEOUT_VALUE deve ser >= 1000 ms"
+#endif
+```
+
+**Se erro de compilação**: Ajuste `system_definitions.h` e tente novamente.
+
+---
+
+## 🔗 Referências
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - Como a arquitetura funciona
+- [COMMUNICATION_HANDLERS.md](./COMMUNICATION_HANDLERS.md) - Detalhes dos handlers
+- [HARDWARE.md](./HARDWARE.md) - Mapeamento de pinos
+- [PROTOCOLO.md](./PROTOCOLO.md) - Formato de payload
 
 ---

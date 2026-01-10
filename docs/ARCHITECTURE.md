@@ -1,437 +1,312 @@
-# Arquitetura de Handlers de Comunicação
+# Arquitetura do Sistema Pendio
 
-## 🏗️ Diagrama Geral
+## 🏗️ Visão Geral da Arquitetura
 
-```
-╔════════════════════════════════════════════════════════════╗
-║                   APLICAÇÃO PENDIO                         ║
-║                                                            ║
-║  main.cpp (Sensor Logic, State Machine, Business Logic)   ║
-║                                                            ║
-║  - Leitura de sensores (AHT, BMP)                          ║
-║  - Máquina de estados (NOT_JOINED, READY, WAIT_CFM)       ║
-║  - Montagem de payloads                                   ║
-║  - Processamento de downlinks                             ║
-╚════════════════════════════════════════════════════════════╝
-                          ▲
-                          │ Usa
-                          │
-        ╔═════════════════╩════════════════╗
-        │                                   │
-        │  commHandler->send()              │
-        │  commHandler->receive()           │
-        │  commHandler->isConnected()       │
-        │                                   │
-        └───────────────┬───────────────────┘
-                        │
-╔═══════════════════════╩════════════════════════════════════╗
-║         CommunicationHandler (Interface Abstrata)          ║
-║                                                            ║
-║  class CommunicationHandler {                              ║
-║    virtual bool begin() = 0;                               ║
-║    virtual bool connect() = 0;                             ║
-║    virtual SendResult send(...) = 0;                       ║
-║    virtual ReceiveResult receive(...) = 0;                 ║
-║    virtual bool isConnected() = 0;                         ║
-║    virtual bool isConfirmed() = 0;                         ║
-║    virtual ConnectionState getConnectionState() = 0;       ║
-║    virtual void process() = 0;                             ║
-║    virtual const char* getStateString() = 0;               ║
-║  };                                                        ║
-╚════════════════════╦═══════════════════╦═══════════════════╝
-                     │                   │
-        ┌────────────┘                   └─────────┐
-        │                                          │
-        ▼                                          ▼
-╔════════════════════╗                  ╔════════════════════╗
-║  LoRaHandler       ║                  ║  WiFiHandler       ║
-║                    ║                  ║                    ║
-║ Implementação:     ║                  ║ Estrutura:         ║
-║ ✓ Completa        ║                  ║ ⏳ Exemplo         ║
-║                    ║                  ║                    ║
-║ Hardware:          ║                  ║ Hardware:          ║
-║ SMW_SX1262M0      ║                  ║ ESP32 WiFi         ║
-║                    ║                  ║                    ║
-║ Features:          ║                  ║ Features:          ║
-║ • OTAA Join       ║                  ║ • SSID Connect    ║
-║ • CFM (ACK)       ║                  ║ • HTTP POST       ║
-║ • ADR             ║                  ║ • TCP Direct      ║
-║ • DR Fixo         ║                  ║ • Headers HTTP    ║
-╚════════════════════╝                  ╚════════════════════╝
+O sistema Pendio implementa uma **arquitetura modular e polimórfica** para suporte de comunicação (LoRaWAN + Wi-Fi) com máquina de estados centralizada.
 
-┌─────────────────────────────────────────────────────────┐
-│  MockCommHandler (Testes)                               │
-│                                                         │
-│  Simula comportamento de handlers reais:                │
-│  • Delays de conexão/envio                              │
-│  • Confirmação automática                               │
-│  • Injeção de downlinks                                 │
-│  • Erros aleatórios                                     │
-│  • Contador de mensagens                                │
-└─────────────────────────────────────────────────────────┘
-```
+### Aplicação Principal
 
-## 📊 Máquina de Estados de Conexão
+| Componente | Responsabilidade | Detalhes |
+|-----------|------------------|----------|
+| `main.cpp` | Orquestração da aplicação | Máquina de estados, sensores, payload e downlinks |
+| Máquina de Estados | Controle de fluxo | `STATE_NOT_JOINED → STATE_READY → STATE_WAIT_CFM` |
+| Sensores | Aquisição de dados | SPendio (RS485), AHT, BMP, Chuva, Bateria |
+| Payload | Formatação de dados | 61 bytes, formato ASCII Hex |
+| Downlinks | Controle remoto | Processamento de mensagens recebidas |
+
+---
+
+### Interface de Comunicação
+
+| Método | Função |
+|------|--------|
+| `begin()` / `end()` | Inicialização e finalização do módulo |
+| `connect()` | Conexão à rede ou servidor |
+| `send(port, data, len)` | Envio de telemetria |
+| `isConfirmed()` | Verificação de ACK |
+| `receive(msg)` | Recepção de downlink |
+| `process()` | Processamento em background |
+| `getConnectionState()` | Estado atual da conexão |
+| `getStateString()` | Descrição legível do estado |
+
+---
+
+### Implementações da Interface
+
+| Implementação | Contexto | Tecnologia | Alcance | Consumo | Status |
+|--------------|---------|------------|---------|---------|--------|
+| `LoRaHandler` | Produção / Campo | SX1262M0 – LoRaWAN | ~15 km | Muito baixo | Implementado 100% |
+| `WiFiHandler` | Protótipo / Desktop | ESP32 Wi-Fi + Firebase RTDB | ~100–200 m | Alto | Implementado 100% |
+
+
+---
+
+## 📋 Estados da Máquina
+
+```mermaid
+stateDiagram-v2
+    [*] --> NOT_JOINED
+
+    NOT_JOINED : Inicial
+    NOT_JOINED : Aguardando Join Accept (OTAA)
+
+    READY : Conectado e pronto
+    READY : Leitura de sensores
+    READY : Envio de payload
+
+    WAIT_CFM : Aguardando ACK
+    WAIT_CFM : Processa downlink
+
+    NOT_JOINED --> READY : connect OK
+    NOT_JOINED --> NOT_JOINED : connect falhou
+
+    READY --> WAIT_CFM : send SUCCESS
+    READY --> READY : send PENDING
+    READY --> NOT_JOINED : send ERROR
+
+    WAIT_CFM --> READY : ACK recebido
+    WAIT_CFM --> WAIT_CFM : timeout
 
 ```
-                     ┌─────────────────┐
-                     │  DISCONNECTED   │
-                     │                 │
-                     │ Estado inicial  │
-                     └────────┬────────┘
-                              │
-                              │ connect()
-                              │
-                     ┌────────▼────────┐
-                     │   CONNECTING    │
-                     │                 │
-                     │ Aguardando JOIN │
-                     └────────┬────────┘
-                              │
-                    ┌─────────┴─────────┐
-                    │                   │
-            (timeout)                (sucesso)
-            │                         │
-            │    ┌────────────────┐   │
-            │    │  ERROR         │   │
-            │    │                │◄──┘
-            │    │ Pode tentar    │
-            │    │ reconectar     │
-            │    └────────┬───────┘
-            │             │
-            └─────────────┴──────────────┐
-                          │              │
-                    connect() novamente
-                          │              │
-                     ┌────▼─────────┐    │
-                     │  CONNECTED   │◄───┘
-                     │              │
-                     │  Pronto!     │
-                     └─┬────────────┘
-                       │
-                    send()
-                       │
-              ┌────────▼─────────┐
-              │ WAITING_CFM      │
-              │                  │
-              │ Aguardando ACK   │
-              │ ou timeout       │
-              └────┬─────────┬───┘
-                   │         │
-          (ACK)    │         │ (timeout)
-                   │         │
-              ┌────▼──┐  ┌───▼────┐
-              │        │  │        │
-              └────┬───┘  └────┬───┘
-                   │           │
-         (volta para CONNECTED)
-                   │
-```
 
-## 🔄 Fluxo Completo de Envio
+---
 
-```
-┌──────────────────────┐
-│   loop() em main.cpp │
-└──────────┬───────────┘
-           │
-           ▼
-    ┌──────────────────────────┐
-    │ 1. Ler sensores          │
-    │    - AHT (temp, umid)    │
-    │    - BMP (pressão)       │
-    │    - RS485 (modbus)      │
-    └──────────┬───────────────┘
-               │
-               ▼
-    ┌──────────────────────────┐
-    │ 2. Montar payload        │
-    │    CPendio_LoRa_Sensor   │
-    │    Data (N bytes)        │
-    └──────────┬───────────────┘
-               │
-               ▼
-    ┌──────────────────────────────────────┐
-    │ 3. Verificar estado da conexão       │
-    │    if (handler->isConnected())       │
-    └──────────┬───────────────────────────┘
-               │
-        ┌──────┴──────┐
-        │             │
-       SIM            NÃO → tentar connect()
-        │
-        ▼
-┌───────────────────────────────────┐
-│ 4. Enviar dados                   │
-│  handler->send(port, data, len)   │
-└────────────┬──────────────────────┘
-             │
-     ┌───────┴─────────┐
-     │                 │
-   SUCCESS         FAILED/...
-     │                 │
-     ▼                 ▼
-┌──────────────┐  ┌────────────┐
-│Estado WAIT   │  │Estado ERROR│
-│     CFM      │  │Retentativa │
-└──────┬───────┘  │log erro    │
-       │          └────────────┘
-       │
- (após ~6s ou ACK recebido)
-       │
-       ▼
-┌──────────────────────────┐
-│ 5. Verificar ACK         │
-│  handler->isConfirmed()  │
-└──────────┬───────────────┘
-           │
-      ┌────┴─────┐
-      │           │
-    TRUE        FALSE
-      │           │
-      ▼           ▼
-┌─────────┐  ┌──────────────┐
-│ACK OK   │  │NACK recebido │
-│Próximo  │  │Erro contador │
-│ciclo    │  │Retentativa   │
-└─────────┘  └──────────────┘
-```
-
-## 🔀 Seleção de Handler
-
-### Compilação Condicional (Recomendado)
+## 🔀 Seleção de Handler em Tempo de Compilação
 
 ```cpp
-// platformio.ini ou compiler flags
+// include/system_definitions.h
 
-#ifdef USE_LORA
-    LoRaConfig cfg = {...};
-    commHandler = new LoRaHandler(cfg);
-#elif defined(USE_WIFI)
-    WiFiConfig cfg = {...};
-    commHandler = new WiFiHandler(cfg);
-#elif defined(USE_MOCK)
-    MockCommConfig cfg = {...};
-    commHandler = new MockCommHandler(cfg);
+// Modo 1: LoRaWAN (PADRÃO)
+// #define COMMUNICATION_MODE_WIFI
+
+// Modo 2: Wi-Fi + Firebase
+#define COMMUNICATION_MODE_WIFI
+
+// Em main.cpp: Seleção automática
+#ifdef COMMUNICATION_MODE_WIFI
+    WiFiConfig wifiConfig = { /* credenciais */ };
+    commHandler = new WiFiHandler(wifiConfig);
 #else
-    #error "Nenhum handler de comunicação selecionado"
+    LoRaConfig loraConfig = { /* configuração */ };
+    commHandler = new LoRaHandler(loraConfig);
 #endif
-
-// Resto do código é agnóstico
 ```
 
-### Factory Pattern (Alternativo)
+---
+
+## 📦 Estrutura de Dados Principais
+
+### DownlinkMessage
 
 ```cpp
-enum CommType { LORA, WIFI, MOCK };
+struct DownlinkMessage {
+    uint8_t port;              // Porta (1-223)
+    uint8_t data[256];         // Payload recebido
+    uint16_t length;           // Tamanho dos dados
+    uint32_t timestamp;        // Timestamp do recebimento
+};
+```
 
-CommunicationHandler* createHandler(CommType type) {
-    switch(type) {
-        case LORA:
-            return new LoRaHandler(loraConfig);
-        case WIFI:
-            return new WiFiHandler(wifiConfig);
-        case MOCK:
-            return new MockCommHandler(mockConfig);
-    }
+### LoRaConfig
+
+```cpp
+struct LoRaConfig {
+    HardwareSerial* serial;           // Serial1 (UART para SX1262M0)
+    const uint8_t* appEUI;            // Application EUI (8 bytes)
+    const uint8_t* appKey;            // Application Key (16 bytes)
+    bool useConfirmation;             // Usar CFM (ACK)
+    bool useADR;                      // Adaptive Data Rate
+    uint8_t fixedDR;                  // Data Rate (0-7) se ADR=off
+    unsigned long joinTimeout;        // OTAA timeout (ms)
+    unsigned long confirmTimeout;     // CFM timeout (ms)
+    uint8_t maxRetries;               // Retentativas de envio
+};
+```
+
+### WiFiConfig
+
+```cpp
+struct WiFiConfig {
+    const char* ssid;                 // SSID da rede
+    const char* password;             // Senha Wi-Fi
+    const char* apiKey;               // API Key Firebase
+    const char* databaseUrl;          // URL do Firebase RTDB
+    const char* deviceId;             // Identificador único
+    unsigned long connectTimeout;     // Timeout de conexão (ms)
+};
+```
+
+---
+
+## 🚀 Sequência de Inicialização
+
+```
+setup()
+│
+├─ iniHW()
+│   ├─ Configurar pinos (LED, controles RS485)
+│   └─ Inicializar EEPROM
+│
+├─ Serial.begin(115200)
+│   └─ Serial de debug
+│
+├─ loraSerial.begin(115200)
+│   └─ Serial1 (comunicação com SX1262M0)
+│
+├─ Inicializar sensores
+│   ├─ Wire.begin() → I2C
+│   ├─ AHT.begin() → Temperatura/Umidade
+│   ├─ BMP.begin() → Pressão
+│   ├─ Serial2.begin() → RS485 (SPendio)
+│   └─ configAnalogRead() → ADC (Bateria)
+│
+├─ commHandler = new LoRaHandler(config) ou WiFiHandler(config)
+│
+├─ commHandler->begin()
+│   ├─ Resetar módulo
+│   ├─ Carregar configuração persistente
+│   └─ Estado = DISCONNECTED
+│
+├─ commHandler->connect()
+│   ├─ Enviar comando JOIN
+│   ├─ Aguardar JOIN ACCEPT (timeout)
+│   └─ Estado = CONNECTED ou ERROR
+│
+└─ State = STATE_NOT_JOINED ou STATE_READY
+
+loop()
+│
+├─ Máquina de Estados
+├─ Leitura de sensores (if timecycle timeout)
+├─ Envio de dados (if payload ready)
+├─ commHandler->process()
+└─ Verificar estado e timeouts
+```
+
+---
+
+## 🔌 Diagrama de Pinos (Resumido)
+
+| Subsistema | Pino(s) | Função |
+|-----------|---------|---------|
+| **LoRa** | GPIO5 (RX1), GPIO23 (TX1) | UART1 → SX1262M0 |
+| **I2C** | GPIO22 (SCL), GPIO21 (SDA) | Sensores AHT, BMP |
+| **RS485** | GPIO16/17 (RX2/TX2), GPIO27 (nRE), GPIO19 (pDE) | SPendio |
+| **Chuva** | GPIO4 | Contato seco |
+| **Bateria** | GPIO39 (ADC) | Tensão (divisor) |
+| **LED** | GPIO2 | LED status |
+
+Detalhes completos: [docs/HARDWARE.md](./HARDWARE.md)
+
+---
+
+## 🎯 Padrão de Design: Strategy Pattern
+
+O projeto utiliza o **Strategy Pattern** para abstrair a comunicação:
+
+```cpp
+// Abstração
+CommunicationHandler* handler;
+
+// Runtime selection (baseado em #define)
+if (USE_LORA) {
+    handler = new LoRaHandler(cfg);
+} else {
+    handler = new WiFiHandler(cfg);
 }
 
-// No setup()
-commHandler = createHandler(CONFIG_COMM_TYPE);
+// Código agnóstico (funciona com qualquer handler)
+handler->begin();
+handler->connect();
+handler->send(1, payload, 61);
+handler->isConfirmed();
+handler->receive(msg);
 ```
 
-## 📦 Estrutura de Dados
+**Benefícios**:
+- ✅ Fácil alternar entre LoRa e Wi-Fi
+- ✅ Código de aplicação não muda
+- ✅ Fácil adicionar novos handlers (4G, MQTT, etc.)
+- ✅ Testes com Mock Handler
 
-```
-┌─────────────────────────────────┐
-│  DownlinkMessage                │
-├─────────────────────────────────┤
-│ uint8_t port (1-223)            │
-│ uint8_t data[256]               │
-│ uint16_t length                 │
-│ uint32_t timestamp              │
-└─────────────────────────────────┘
+---
 
-┌─────────────────────────────────┐
-│  LoRaConfig                     │
-├─────────────────────────────────┤
-│ HardwareSerial* serial          │
-│ const uint8_t* appEUI (8B)      │
-│ const uint8_t* appKey (16B)     │
-│ bool useConfirmation            │
-│ bool useADR                     │
-│ uint8_t fixedDR (0-7)           │
-│ unsigned long joinTimeout (ms)  │
-│ unsigned long confirmTimeout    │
-│ uint8_t maxRetries              │
-└─────────────────────────────────┘
+## 📈 Extensibilidade: Adicionar Novo Handler
 
-┌─────────────────────────────────┐
-│  MockCommConfig                 │
-├─────────────────────────────────┤
-│ unsigned long joinDelay (ms)    │
-│ unsigned long sendDelay (ms)    │
-│ bool autoConfirm                │
-│ bool simulateErrors             │
-│ uint8_t errorRate (0-100%)      │
-└─────────────────────────────────┘
+### 1. Criar Header
 
-┌─────────────────────────────────┐
-│  WiFiConfig (quando completo)   │
-├─────────────────────────────────┤
-│ const char* ssid                │
-│ const char* password            │
-│ const char* serverAddr          │
-│ uint16_t serverPort             │
-│ unsigned long connectTimeout    │
-│ unsigned long sendTimeout       │
-└─────────────────────────────────┘
-```
+```cpp
+// include/comm/LTE4GHandler.h
+#ifndef _LTE4G_HANDLER_H
+#define _LTE4G_HANDLER_H
 
-## 🔗 Dependências de Classe
+#include "CommunicationHandler.h"
 
-```
-CommunicationHandler
-    △
-    │ (herança)
-    │
-    ├──────────────┬──────────────┬──────────────┐
-    │              │              │              │
-LoRaHandler    WiFiHandler   MockCommHandler
-    │
-    ├─ SMW_SX1262M0
-    ├─ HardwareSerial
-    └─ Arduino.h
+struct LTE4GConfig {
+    const char* apn;
+    const char* serverAddr;
+    uint16_t serverPort;
+    unsigned long connectTimeout;
+};
 
-main.cpp
-    │
-    ├─ CommunicationHandler*
-    ├─ Sensores.h
-    ├─ HW.h
-    ├─ config.h
-    ├─ credentials.h
-    └─ aplic.h
+class LTE4GHandler : public CommunicationHandler {
+private:
+    LTE4GConfig config;
+    ConnectionState currentState;
+    // ... membros privados
+    
+public:
+    explicit LTE4GHandler(const LTE4GConfig& cfg);
+    ~LTE4GHandler() override = default;
+    
+    // Implementar todos os métodos virtuais:
+    bool begin() override;
+    bool connect() override;
+    SendResult send(uint8_t port, const uint8_t* data, uint16_t length) override;
+    bool isConfirmed() override;
+    ReceiveResult receive(DownlinkMessage& message) override;
+    ConnectionState getConnectionState() override;
+    void process() override;
+    const char* getStateString() override;
+    void end() override;
+    bool isConnected() override;
+    
+    // Métodos específicos se necessário
+};
+
+#endif
 ```
 
-## 🚀 Fluxo de Inicialização
+### 2. Implementar CPP
 
-```
-┌─────────────────┐
-│  Arduino setup()│
-└────────┬────────┘
-         │
-         ▼
-┌──────────────────────┐
-│ 1. iniHW()           │
-│    Configura pinos   │
-└────────┬─────────────┘
-         │
-         ▼
-┌──────────────────────┐
-│ 2. Serial.begin()    │
-│    Serial1.begin()   │
-│    Serial2.begin()   │
-└────────┬─────────────┘
-         │
-         ▼
-┌──────────────────────┐
-│ 3. Inicializar sens. │
-│    AHT, BMP, RS485   │
-└────────┬─────────────┘
-         │
-         ▼
-┌────────────────────────────────┐
-│ 4. handler->begin()            │
-│    - Reset módulo              │
-│    - Carregar configuração     │
-│    - Salvar settings           │
-└────────┬───────────────────────┘
-         │
-         ▼
-┌────────────────────────────────┐
-│ 5. handler->connect()          │
-│    - Enviar JOIN               │
-│    - Aguardar (timeout)        │
-│    - Estado CONNECTING->CONN.  │
-└────────┬───────────────────────┘
-         │
-         ▼
-┌─────────────────────┐
-│ Setup concluído     │
-│ Pronto para loop    │
-└─────────────────────┘
-```
+```cpp
+// src/comm/LTE4GHandler.cpp
+#include "comm/LTE4GHandler.h"
 
-## 🔄 Fluxo do Loop Cíclico
+LTE4GHandler::LTE4GHandler(const LTE4GConfig& cfg)
+    : config(cfg), currentState(ConnectionState::DISCONNECTED) {}
 
-```
-loop() {
-    ┌─────────────────────────────────┐
-    │ handler->process()              │
-    │ (atualizar estados, timeouts)   │
-    └────────┬────────────────────────┘
-             │
-    ┌────────▼────────────────────────┐
-    │ Máquina de Estados Principal    │
-    └────────┬────────────────────────┘
-             │
-        ┌────┴─────────────────────────────┐
-        │                                  │
-    STATE_NOT_JOINED              STATE_READY
-        │                              │
-        ▼                              ▼
-    if (isConn) ?              Ler sensores
-        │                      Montar payload
-    STATE_READY              handler->send()
-                                   │
-                          STATE_WAIT_CFM
-                                   │
-                    ┌──────────────┴──────────────┐
-                    │                             │
-              isConfirmed()?            timeout?
-                    │                      │
-              ┌─────┴─────┐           ┌─────┴────┐
-              │           │           │          │
-             YES         NO        Retry    Max retries?
-              │           │           │         │
-              ▼           ▼           ▼         ▼
-         STATE_READY  (erro)    STATE_WAIT  STATE_READY
-              │                  CFM      (erro)
-              │
-         receive() downlink
-              │
-         processar dados
-              │
-              ▼
-         loop() continua
+bool LTE4GHandler::begin() {
+    // Inicializar modem LTE/4G
+    LOGI("LTE4G", "Inicializando...");
+    return true;
 }
+
+// ... implementar demais métodos
 ```
 
-## 🎯 Matriz de Compatibilidade
+### 3. Usar em main.cpp
 
-| Feature | LoRa | WiFi | Mock |
-|---------|------|------|------|
-| begin() | ✅ | ⏳ | ✅ |
-| connect() | ✅ | ⏳ | ✅ |
-| send() | ✅ | ⏳ | ✅ |
-| isConfirmed() | ✅ | ⏳ | ✅ |
-| receive() | ✅ | ⏳ | ✅ |
-| process() | ✅ | ⏳ | ✅ |
-| getConnectionState() | ✅ | ⏳ | ✅ |
-| getStateString() | ✅ | ⏳ | ✅ |
-
-**Status**: ✅ Implementado | ⏳ Em desenvolvimento
-
-## 📈 Escalabilidade
-
-Para cada novo handler (ex: 4G, LoRaWAN-MQTT):
-
-```
-1. Criar: include/NewHandler.h
-2. Criar: src/NewHandler.cpp
-3. Herdar: class NewHandler : public CommunicationHandler
-4. Implementar: 9 métodos virtuais
-5. Usar: CommunicationHandler* h = new NewHandler(cfg);
+```cpp
+#ifdef COMMUNICATION_MODE_LTE4G
+    LTE4GConfig cfg = {
+        .apn = "vivo.br",
+        .serverAddr = "servidor.com",
+        .serverPort = 8080,
+        .connectTimeout = 30000
+    };
+    commHandler = new LTE4GHandler(cfg);
+#endif
 ```
 
 ---
