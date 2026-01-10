@@ -4,10 +4,10 @@
  * @copyright Copyright (c) 2025
  */
 
-#include "system_utils.h"
-#include "config.h"
-#include "Logger.h"
-#include "Pendio_LoRa_Wemos_Robocore.h"
+#include "core/system_utils.h"
+#include "system_definitions.h"
+#include "utils/Logger.h"
+#include "hardware_definitions.h"
 #include <EEPROM.h>
 
 // Variável global para armazenar estado do LED
@@ -73,7 +73,7 @@ uint8_t Validate_Cycle_Time(uint8_t ct) {
     default: ret = 15; break; // Padrão (15 min)
   }
   #ifdef USE_EEPROM
-    EEPROM.update(0, ret); // Cycle time must be store in EEPROM.
+    EEPROM.write(0, ret); // Cycle time must be store in EEPROM.
   #endif
   return(ret);
 }
@@ -86,7 +86,7 @@ uint8_t Validate_Cycle_Time(uint8_t ct) {
 uint8_t Validate_Settings(uint8_t st) {
   unsigned char ret = st;
   #ifdef USE_EEPROM
-    EEPROM.update(1, ret); // Settings must be updated in EEPROM.
+    EEPROM.write(1, ret); // Settings must be updated in EEPROM.
   #endif
   return(ret);
 }

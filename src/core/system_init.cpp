@@ -4,14 +4,13 @@
  * @copyright Copyright (c) 2025
  */
 
-#include "system_init.h"
-#include "system_utils.h"
-#include "config.h"
-#include "credentials.h"
-#include "aplic.h"
-#include "Logger.h"
-#include "LoRaHandler.h"
-#include "WiFiHandler.h"
+#include "core/system_init.h"
+#include "core/system_utils.h"
+#include "system_definitions.h"
+#include "comm/credentials.h"
+#include "utils/Logger.h"
+#include "comm/LoRaHandler.h"
+#include "comm/WiFiHandler.h"
 #include <EEPROM.h>
 #include <HardwareSerial.h>
 

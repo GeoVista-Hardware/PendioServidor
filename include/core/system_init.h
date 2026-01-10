@@ -7,7 +7,7 @@
 #ifndef _SYSTEM_INIT_H
 #define _SYSTEM_INIT_H
 
-#include "CommunicationHandler.h"
+#include "comm/CommunicationHandler.h"
 
 /**
  * @brief Inicializa o hardware básico (pinos, LED, etc).

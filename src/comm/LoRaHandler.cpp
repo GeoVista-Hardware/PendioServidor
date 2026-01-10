@@ -4,9 +4,9 @@
  * @copyright Copyright (c) 2025
  */
 
-#include "LoRaHandler.h"
+#include "comm/LoRaHandler.h"
 #include <Arduino.h>
-#include "Logger.h"
+#include "utils/Logger.h"
 
 // Constantes internas
 static const unsigned long DEFAULT_JOIN_TIMEOUT = 30000;      // 30s

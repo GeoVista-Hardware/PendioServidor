@@ -11,7 +11,7 @@
 #define _WIFI_HANDLER_H
 
 // Inclui a interface base
-#include "CommunicationHandler.h"
+#include "comm/CommunicationHandler.h"
 
 // Includes do Framework e Wi-Fi
 #include <Arduino.h>

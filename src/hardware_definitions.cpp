@@ -12,7 +12,7 @@
 28/11/2023 - 
 */
 
-#include "Aplic.h"
+#include "system_definitions.h"
 
 //------------------------------------------------------------------------------
 //      iniHWPorts - Inicializa os Ports de HW

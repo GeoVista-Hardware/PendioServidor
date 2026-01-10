@@ -4,11 +4,11 @@
  * @copyright Copyright (c) 2025
  */
 
-#include "state_machine.h"
-#include "system_utils.h"
-#include "config.h"
-#include "Logger.h"
-#include "Sensores.h"
+#include "core/state_machine.h"
+#include "core/system_utils.h"
+#include "system_definitions.h"
+#include "utils/Logger.h"
+#include "hardware/Sensores.h"
 
 // Declarações externas
 extern CPendio_LoRa_Sensor_Data_Type CPendio_LoRa_Sensor_Data;

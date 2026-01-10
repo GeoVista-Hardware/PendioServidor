@@ -8,7 +8,7 @@
 #ifndef _LORA_HANDLER_H
 #define _LORA_HANDLER_H
 
-#include "CommunicationHandler.h"
+#include "comm/CommunicationHandler.h"
 #include <RoboCore_SMW_SX1262M0.h>
 #include <HardwareSerial.h>
 

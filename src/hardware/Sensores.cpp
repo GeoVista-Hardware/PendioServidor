@@ -18,8 +18,8 @@
 
 */
 
-#include "Aplic.h"
-#include "Logger.h"
+#include "system_definitions.h"
+#include "utils/Logger.h"
 
 const uchar TabHexa[] = {"0123456789ABCDEF"};
 char inputBuffer[32];

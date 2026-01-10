@@ -1,15 +1,64 @@
 /**
- * @file config.h
- * @brief Configurações centralizadas do sistema Pendio
- * @details Define comportamento, limites e features do firmware
- * @copyright Copyright (c) 2025
- *
- * @note Edite este arquivo para ajustar comportamento
- * @warning Algumas mudanças requerem recompilação
+ * @file system_definitions.h
+ * @brief Definições globais do sistema Pendio
+ * @details Este ficheiro contém definições e macros globais utilizadas em todo o
+ * projeto Pendio.
+ * @copyright Copyright (c) 2026
+ * @note Edite este arquivo com cuidado, pois afeta todo o sistema.
  */
 
-#ifndef _CONFIG_H
-#define _CONFIG_H
+#ifndef _SYSTEM_DEFINITIONS_H
+#define _SYSTEM_DEFINITIONS_H
+
+// ============================================================================
+// VERSÃO DO PROJETO
+// ============================================================================
+
+#define Versao "WRCPendio Wemos Robocore CPendio"
+#define Data   "10/01/2024"
+
+// ============================================================================
+// MACROS GERAIS
+// ============================================================================
+
+#define ON    1
+#define OFF   0
+#define LIGA  1
+#define DESLIGA 0
+
+#define CR 0x0D
+#define LF 0x0A
+
+#define SPENDIO_TIMEOUT   20        // 200 ms
+
+typedef unsigned char uchar;
+typedef unsigned int  uint;
+typedef unsigned short ushort;
+
+#ifdef MAIN
+ #define global
+#else
+ #define global extern
+#endif
+
+// ============================================================================
+// INCLUDES COMUNS
+// ============================================================================
+
+#include <arduino.h>
+#include <RoboCore_SMW_SX1262M0.h>
+#include <HardwareSerial.h>
+#include <EEPROM.h>
+#include <stdint.h>
+#include <Wire.h>
+#include <Adafruit_AHTX0.h>
+#include <Adafruit_BMP280.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include "hardware_definitions.h"
+#include "hardware_definitions.h"
+#include "hardware_definitions.h"
+#include "hardware/Sensores.h"
 
 // ============================================================================
 // MODO DE OPERAÇÃO
@@ -18,6 +67,11 @@
 /**
  * @section OPERATIONAL Modo Operacional
  */
+
+/** @brief Define o modo de comunicação */
+// Descomente a linha abaixo para ativar o modo Protótipo (Wi-Fi + Firebase)
+// Comente para compilar a versão LoRaWAN
+#define COMMUNICATION_MODE_WIFI 
 
 /** @brief Ativa logging serial estruturado (RECOMENDADO) */
 #define ENABLE_LOGGING              1
@@ -29,7 +83,9 @@
 #define SERIAL_BAUDRATE             115200
 
 /** @brief Ativa persistência de dados em EEPROM */
-#define ENABLE_EEPROM               0
+// Definir para usar EEPROM para persistência de dados
+// Comente para desativar
+#define USE_EEPROM
 
 /** @brief Ativa simulação de JOIN para testes sem hardware */
 #define ENABLE_FAKE_JOIN            0
@@ -49,11 +105,11 @@
 #define JOIN_TIMEOUT_VALUE          10000
 
 /** @brief Timeout para aguardar ACK/CFM [ms] */
-#define CFM_TIMEOUT_VALUE           180000    // 3 minutos
+#define CFM_TIMEOUT_VALUE           180000                // 3 minutos
 
 /** @brief Intervalo mínimo entre mensagens [ms] */
-#define NEXT_MSG_TIMEOUT_VALUE      20000     // 20 segundos (teste)
-// #define NEXT_MSG_TIMEOUT_VALUE   1800000    // 30 minutos (produção)
+#define NEXT_MSG_TIMEOUT_VALUE      20000                 // 20 segundos (teste)
+// #define NEXT_MSG_TIMEOUT_VALUE   1800000               // 30 minutos (produção)
 
 /** @brief Também suportado por legado: NXTMSG_TIMEOUT_VALUE */
 #define NXTMSG_TIMEOUT_VALUE        NEXT_MSG_TIMEOUT_VALUE
@@ -178,5 +234,6 @@
     #error "LORA_MAX_PAYLOAD inválido (10-242)"
 #endif
 
-#endif /* _CONFIG_H */
+// ============================================================================
 
+#endif /* _SYSTEM_DEFINITIONS_H */

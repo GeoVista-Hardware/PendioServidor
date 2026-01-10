@@ -8,8 +8,8 @@
 
 // Includes da aplicação
 
-#include "WiFiHandler.h"
-#include "Logger.h" 
+#include "comm/WiFiHandler.h"
+#include "utils/Logger.h" 
 
 // Addons da biblioteca Firebase
 

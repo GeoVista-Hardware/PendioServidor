@@ -7,7 +7,7 @@
 #ifndef _STATE_MACHINE_H
 #define _STATE_MACHINE_H
 
-#include "CommunicationHandler.h"
+#include "comm/CommunicationHandler.h"
 
 /**
  * @enum SystemState

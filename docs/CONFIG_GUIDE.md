@@ -8,7 +8,7 @@ Referência completa das configurações do sistema.
 
 ```
 include/config.h                    ← PRINCIPAL (edite aqui)
-include/Pendio_LoRa_Wemos_Robocore.h  ← Hardware (raramente muda)
+include/hardware_definitions.h  ← Hardware (raramente muda)
 include/credentials.h               ← AppEUI, AppKey
 platformio.ini                      ← Ambiente de build
 ```

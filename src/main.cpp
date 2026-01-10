@@ -24,20 +24,20 @@ Data:  26 de  Abril 2025
 #include <EEPROM.h>
 
 // Headers de Configuração
-#include "config.h"
-#include "credentials.h"
-#include "Logger.h"
-#include "Sensores.h"
+#include "system_definitions.h"
+#include "comm/credentials.h"
+#include "utils/Logger.h"
+#include "hardware/Sensores.h"
 
 // Headers do Sistema
-#include "system_utils.h"
-#include "system_init.h"
-#include "state_machine.h"
+#include "core/system_utils.h"
+#include "core/system_init.h"
+#include "core/state_machine.h"
 
 // Headers de Comunicação
-#include "CommunicationHandler.h"
-#include "LoRaHandler.h"
-#include "WiFiHandler.h"
+#include "comm/CommunicationHandler.h"
+#include "comm/LoRaHandler.h"
+#include "comm/WiFiHandler.h"
 
 //*****************************************************************************************
 //  DEFINIÇÕES GLOBAIS E VARIÁVEIS
