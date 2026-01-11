@@ -104,8 +104,8 @@ typedef unsigned short ushort;
 /** @brief Timeout para OTAA Join [ms] */
 #define JOIN_TIMEOUT_VALUE          10000
 
-/** @brief Timeout para aguardar ACK/CFM [ms] */
-#define CFM_TIMEOUT_VALUE           180000                // 3 minutos
+/** @brief Timeout para aguardar ACK/CFM [ms] - DEPRECADO: usar getConfirmationTimeout() */
+#define CFM_TIMEOUT_VALUE           180000                // OBSOLETO: cada handler define seu próprio timeout
 
 /** @brief Intervalo mínimo entre mensagens [ms] */
 #define NEXT_MSG_TIMEOUT_VALUE      20000                 // 20 segundos (teste)

@@ -125,6 +125,14 @@ public:
      * @return const char* Descrição do estado
      */
     virtual const char* getStateString() = 0;
+
+    /**
+     * @brief Obtém o timeout apropriado para aguardar ACK/Confirmação [ms]
+     * @return unsigned long Timeout em milissegundos
+     * @details WiFi: ~10 segundos (instantâneo)
+     *          LoRa: ~180 segundos (assíncrono)
+     */
+    virtual unsigned long getConfirmationTimeout() = 0;
 };
 
 #endif /* _COMMUNICATION_HANDLER_H */

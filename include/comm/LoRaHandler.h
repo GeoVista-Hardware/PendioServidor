@@ -154,6 +154,12 @@ private:
      * @brief Traduz CommandResponse para SendResult
      */
     SendResult commandToSendResult(CommandResponse response);
+
+    /**
+     * @brief Obtém o timeout apropriado para aguardar ACK/Confirmação.
+     * @return unsigned long 180000 ms (3 minutos) - LoRa é assíncrono
+     */
+    unsigned long getConfirmationTimeout() override;
 };
 
 #endif /* _LORA_HANDLER_H */

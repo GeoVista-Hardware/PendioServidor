@@ -142,7 +142,8 @@ void loop() {
       case STATE_READY:
         State = process_state_ready(commHandler);
         if (State == STATE_WAIT_CFM) {
-          timecycle = CFM_TIMEOUT_VALUE;
+          // Usa timeout dinamicamente baseado no handler (WiFi: 10s, LoRa: 180s)
+          timecycle = commHandler->getConfirmationTimeout();
           timenow = millis();
         }
         break;

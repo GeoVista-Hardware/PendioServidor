@@ -165,6 +165,12 @@ public:
      */
     const char* getStateString() override;
     
+    /**
+     * @brief Obtém o timeout apropriado para aguardar ACK/Confirmação.
+     * @return unsigned long 10000 ms (10 segundos) - WiFi é instantâneo
+     */
+    unsigned long getConfirmationTimeout() override;
+    
 };
 
 #endif /* _WIFI_HANDLER_H */

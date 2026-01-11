@@ -416,3 +416,11 @@ const char* LoRaHandler::getStateString() {
             return "UNKNOWN";
     }
 }
+
+/**
+ * @brief Obtém o timeout apropriado para LoRaWAN
+ */
+unsigned long LoRaHandler::getConfirmationTimeout() {
+    // LoRaWAN é assíncrono, ACK pode levar minutos
+    return 180000;  // 180 segundos (3 minutos)
+}

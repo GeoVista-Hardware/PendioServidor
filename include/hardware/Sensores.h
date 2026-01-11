@@ -58,7 +58,9 @@ typedef enum {
   E_CHUVA_ANALISE,
 } t_eChuvaEstado;
 
+#if !defined(Nib)
 #define Nib(x)      ((x > 9)?('A' + x - 0xa):('0' + x))
+#endif
 
 #define DEBPmax      20
 #define DEBDmax      20

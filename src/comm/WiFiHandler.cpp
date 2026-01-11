@@ -273,3 +273,9 @@ String WiFiHandler::bufferToBase64(const uint8_t* data, uint16_t length) {
     // Wrapper simples para a função da biblioteca
     return base64::encode(data, length);
 }
+
+// Obtém o timeout apropriado para WiFi
+unsigned long WiFiHandler::getConfirmationTimeout() {
+    // WiFi é instantâneo, timeout curto é suficiente
+    return 10000;  // 10 segundos
+}
