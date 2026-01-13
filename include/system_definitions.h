@@ -71,7 +71,7 @@ typedef unsigned short ushort;
 /** @brief Define o modo de comunicação */
 // Descomente a linha abaixo para ativar o modo Protótipo (Wi-Fi + Firebase)
 // Comente para compilar a versão LoRaWAN
-#define COMMUNICATION_MODE_WIFI 
+// #define COMMUNICATION_MODE_WIFI 
 
 /** @brief Ativa logging serial estruturado (RECOMENDADO) */
 #define ENABLE_LOGGING              1
@@ -102,7 +102,7 @@ typedef unsigned short ushort;
  */
 
 /** @brief Timeout para OTAA Join [ms] */
-#define JOIN_TIMEOUT_VALUE          10000
+#define JOIN_TIMEOUT_VALUE          45000                 // 45 segundos - balanço entre permitir JOIN lento e não esperar demais
 
 /** @brief Timeout para aguardar ACK/CFM [ms] - DEPRECADO: usar getConfirmationTimeout() */
 #define CFM_TIMEOUT_VALUE           180000                // OBSOLETO: cada handler define seu próprio timeout

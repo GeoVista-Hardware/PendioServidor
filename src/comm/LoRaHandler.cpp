@@ -247,10 +247,12 @@ ReceiveResult LoRaHandler::receive(DownlinkMessage& message) {
     CommandResponse response = lorawan.readX(port, buffer);
     
     if (response != CommandResponse::OK) {
+        LOGD("LoRa", "readX retornou erro: %d", (int)response);
         return ReceiveResult::ERROR;
     }
 
     if (!buffer.available()) {
+        LOGD("LoRa", "Buffer vazio - nenhuma mensagem disponível");
         return ReceiveResult::NO_MESSAGE;
     }
 
@@ -266,7 +268,13 @@ ReceiveResult LoRaHandler::receive(DownlinkMessage& message) {
     // Guardar referência
     lastDownlink = message;
 
-    LOGI("LoRa", "Mensagem recebida na porta %u (len=%u)", (unsigned)port, (unsigned)message.length);
+    LOGI("LoRa", "Downlink: porta=%u, tamanho=%u bytes", (unsigned)port, (unsigned)message.length);
+    
+    // Log dos dados em hex para diagnóstico
+    LOGD("LoRa", "Dados (hex):");
+    for (uint16_t i = 0; i < message.length && i < 64; i++) {
+        LOGD("LoRa", "%02X", message.data[i]);
+    }
 
     return ReceiveResult::MESSAGE_RECEIVED;
 }
@@ -421,6 +429,8 @@ const char* LoRaHandler::getStateString() {
  * @brief Obtém o timeout apropriado para LoRaWAN
  */
 unsigned long LoRaHandler::getConfirmationTimeout() {
-    // LoRaWAN é assíncrono, ACK pode levar minutos
+    // LoRaWAN é assíncrono, ACK pode levar até 3 minutos
+    // O main.cpp calcula o ciclo total desde o envio, então aqui retornamos
+    // o máximo de tempo que podemos esperar por ACK
     return 180000;  // 180 segundos (3 minutos)
 }

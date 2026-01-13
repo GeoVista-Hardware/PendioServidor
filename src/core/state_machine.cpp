@@ -95,10 +95,12 @@ SystemState process_state_wait_cfm(CommunicationHandler* commHandler) {
     }
 
     // Define o tempo para o próximo envio (Ciclo)
-    unsigned long cicloMs = (unsigned long)NVM_LoRaWAN_Cycle_Time * 60000;
-    if (cicloMs == 0) cicloMs = 60000; // Mínimo 1 min
+    // Ciclo total: NVM_LoRaWAN_Cycle_Time minutos (ex: 4 min)
+    // Já foi gasto tempo esperando ACK, então dormimos o restante
+    unsigned long totalCicloMs = (unsigned long)NVM_LoRaWAN_Cycle_Time * 60000;
+    if (totalCicloMs == 0) totalCicloMs = 180000; // Mínimo 3 minutos
 
-    LOGI("SYSTEM", "Dormindo por %lu ms...", cicloMs);
+    LOGI("SYSTEM", "Ciclo aguardando até %lu ms para próximo envio", totalCicloMs);
     return STATE_READY;
 
   } else {

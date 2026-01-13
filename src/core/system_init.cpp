@@ -50,9 +50,9 @@ void initializeSerialInterfaces(void) {
   loraSerial.begin(9600, SERIAL_8N1, RXD1_LoRa, TXD1_LoRa);
 
   // Comunicação UART para os sensores SPendio (RS485)
-  Serial2.begin(4800, SERIAL_8N1, RXD2_RS485, TXD2_RS485);
   Serial2.setRxBufferSize(64);
   Serial2.setTimeout(100);
+  Serial2.begin(4800, SERIAL_8N1, RXD2_RS485, TXD2_RS485);
 
   LOGI("INIT", "Interfaces seriais inicializadas");
 }
@@ -111,7 +111,7 @@ CommunicationHandler* initializeCommunicationHandler(void) {
     NVM_LoRaWAN_Cycle_Time = EEPROM.read(0);
     NVM_LoRaWAN_Use_Cfm = (NVM_SETTINGS_CFM_BIT == (EEPROM.read(1) & NVM_SETTINGS_CFM_BIT));
   #else
-    NVM_LoRaWAN_Cycle_Time = 3;
+    NVM_LoRaWAN_Cycle_Time = 4;  // 4 minutos para acomodar até 3min de ACK do LoRa
     NVM_LoRaWAN_Use_Cfm = true;
   #endif
 
@@ -122,7 +122,7 @@ CommunicationHandler* initializeCommunicationHandler(void) {
   CommunicationHandler* handler = nullptr;
 
   #ifdef COMMUNICATION_MODE_WIFI
-    LOGI("COMM", "MODO WIFI (Protótipo)");
+    LOGI("COMM", "MODO WIFI");
     handler = new WiFiHandler(wifiConfig);
   #else
     LOGI("COMM", "MODO LORAWAN");

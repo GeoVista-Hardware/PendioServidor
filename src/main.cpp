@@ -87,6 +87,7 @@ bool NVM_LoRaWAN_Use_Cfm = false;
 unsigned long timeout   = 0;
 unsigned long timenow   = 0;
 unsigned long timecycle = 0;
+unsigned long sendTime  = 0;  // Tempo quando a mensagem foi enviada
 
 // Variáveis de Controle
 bool joined     = false;
@@ -142,20 +143,31 @@ void loop() {
       case STATE_READY:
         State = process_state_ready(commHandler);
         if (State == STATE_WAIT_CFM) {
-          // Usa timeout dinamicamente baseado no handler (WiFi: 10s, LoRa: 180s)
-          timecycle = commHandler->getConfirmationTimeout();
-          timenow = millis();
+          // Marca o tempo de envio para calcular ciclo total depois
+          sendTime = timenow;
+          // Usa timeout de ACK (máximo de espera)
+          unsigned long ackTimeout = commHandler->getConfirmationTimeout();
+          timecycle = ackTimeout;
         }
         break;
 
       case STATE_WAIT_CFM:
         State = process_state_wait_cfm(commHandler);
         if (State == STATE_READY) {
-          unsigned long cicloMs = (unsigned long)NVM_LoRaWAN_Cycle_Time * 60000;
-          if (cicloMs == 0) cicloMs = 60000;
-          timecycle = cicloMs;
+          // Calcula tempo restante para completar o ciclo total
+          unsigned long totalCicloMs = (unsigned long)NVM_LoRaWAN_Cycle_Time * 60000;
+          if (totalCicloMs == 0) totalCicloMs = 180000; // Mínimo 3 minutos
+          
+          unsigned long elapsedSinceSend = timenow - sendTime;
+          unsigned long remainingMs = (elapsedSinceSend < totalCicloMs) ? 
+                                       (totalCicloMs - elapsedSinceSend) : 0;
+          
+          LOGD("SYSTEM", "Ciclo: Enviado há %lu ms, restam %lu ms (total %lu ms)", 
+               elapsedSinceSend, remainingMs, totalCicloMs);
+          
+          timecycle = remainingMs;
         } else {
-          timecycle = 5000;
+          timecycle = 5000;  // Se ainda aguardando, tenta de novo em 5s
         }
         break;
 
