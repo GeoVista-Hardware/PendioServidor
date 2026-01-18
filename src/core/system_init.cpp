@@ -64,6 +64,7 @@ void initializeHardware(void) {
  * @brief Inicializa as interfaces seriais.
  */
 void initializeSerialInterfaces(void) {
+
   // Inicializa logger (Serial)
   Logger::begin(115200);
 
@@ -71,10 +72,16 @@ void initializeSerialInterfaces(void) {
   loraSerial.begin(9600, SERIAL_8N1, RXD1_LoRa, TXD1_LoRa);
 
   // Comunicação UART para os sensores SPendio (RS485)
-  Serial2.setRxBufferSize(64);
-  Serial2.setTimeout(100);
-  Serial2.begin(4800, SERIAL_8N1, RXD2_RS485, TXD2_RS485);
+  #if SENSOR_SPENDIO_ENABLED
+    Serial2.setRxBufferSize(64);
+    Serial2.setTimeout(100);
+    Serial2.begin(4800, SERIAL_8N1, RXD2_RS485, TXD2_RS485);
+    LOGI("INIT", "Interface RS485 (SPendio) inicializada");
+  #else
+    LOGI("INIT", "Interface RS485 (SPendio) DESABILITADA");
+  #endif
 
+  // Mensagem de inicialização das interfaces concluída
   LOGI("INIT", "Interfaces seriais inicializadas");
 }
 
@@ -82,28 +89,38 @@ void initializeSerialInterfaces(void) {
  * @brief Inicializa os sensores I2C (AHT, BMP280).
  */
 void initializeSensors(void) {
+
   // Sensor AHT (Temp/Umid)
-  if (!aht.begin()) {
-    LOGE("SENSOR", "AHT10/20 não encontrado.");
-  } else {
-    LOGI("SENSOR", "AHT10/20 detectado");
-  }
+  #if SENSOR_AHT_ENABLED
+    if (!aht.begin()) {
+      LOGE("SENSOR", "AHT10/20 não encontrado.");
+    } else {
+      LOGI("SENSOR", "AHT10/20 detectado");
+    }
+  #else 
+    LOGI("SENSOR", "AHT10/20 DESABILITADO");
+  #endif
 
   // Sensor BMP (Pressão)
-  if (!bmp.begin(END_BMP)) {
-    LOGE("SENSOR", "BMP280 não encontrado");
+  #if SENSOR_BMP_ENABLED
+    if (!bmp.begin(END_BMP)) {
+      LOGE("SENSOR", "BMP280 não encontrado");
+      g_bBMPPresente = false;
+    } else {
+      LOGI("SENSOR", "BMP280 detectado");
+      bmp.setSampling(
+        Adafruit_BMP280::MODE_NORMAL,
+        Adafruit_BMP280::SAMPLING_X2,
+        Adafruit_BMP280::SAMPLING_X16,
+        Adafruit_BMP280::FILTER_X16,
+        Adafruit_BMP280::STANDBY_MS_500
+      );
+      g_bBMPPresente = true;
+    }
+  #else 
     g_bBMPPresente = false;
-  } else {
-    LOGI("SENSOR", "BMP280 detectado");
-    bmp.setSampling(
-      Adafruit_BMP280::MODE_NORMAL,
-      Adafruit_BMP280::SAMPLING_X2,
-      Adafruit_BMP280::SAMPLING_X16,
-      Adafruit_BMP280::FILTER_X16,
-      Adafruit_BMP280::STANDBY_MS_500
-    );
-    g_bBMPPresente = true;
-  }
+    LOGI("SENSOR", "BMP280 DESABILITADO");
+  #endif
 
   delay(1000);
 }
