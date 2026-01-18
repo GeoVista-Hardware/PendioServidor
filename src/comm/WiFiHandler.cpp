@@ -7,6 +7,7 @@
 #include "utils/Logger.h"
 #include "system_definitions.h"
 #include <ctype.h>
+#include <esp_task_wdt.h>
 
 // Função auxiliar (mantida do original)
 uint8_t hexToByte(char c) {
@@ -77,6 +78,7 @@ bool WiFiHandler::connect() {
     while (WiFi.status() != WL_CONNECTED && millis() - start < config.connectTimeout) {
         delay(500);
         Serial.print(".");
+        esp_task_wdt_reset();
     }
     Serial.println();
 

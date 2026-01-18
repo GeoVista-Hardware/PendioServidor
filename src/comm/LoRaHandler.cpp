@@ -7,6 +7,7 @@
 #include "comm/LoRaHandler.h"
 #include <Arduino.h>
 #include "utils/Logger.h"
+#include <esp_task_wdt.h>
 
 // Constantes internas
 static const unsigned long DEFAULT_JOIN_TIMEOUT = 30000;      // 30s
@@ -161,6 +162,7 @@ bool LoRaHandler::connect() {
     unsigned long startTime = millis();
     while ((millis() - startTime) < (config.joinTimeout ? config.joinTimeout : DEFAULT_JOIN_TIMEOUT)) {
         delay(100);
+        esp_task_wdt_reset();
         if (lorawan.isConnected()) {
             LOGI("LoRa", "Conectado com sucesso");
             currentState = ConnectionState::CONNECTED;
