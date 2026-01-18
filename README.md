@@ -1,6 +1,6 @@
 # 📡 Pendio - Monitoramento de Taludes (LoRaWAN + Wi-Fi)
 
-Firmware integrado para o sistema de monitoramento de taludes e encostas "Pendio", baseado no ESP32 (Wemos D1 R32) com suporte para comunicação via LoRaWAN (Robocore SMW_SX1262M0) e Wi-Fi + Firebase Realtime Database.
+Firmware integrado para o sistema de monitoramento de taludes e encostas "Pendio", baseado no ESP32 (Wemos D1 R32) com suporte para comunicação via LoRaWAN (Robocore SMW_SX1262M0) e Wi-Fi + Oracle Apex Database.
 
 ---
 
@@ -8,8 +8,8 @@ Firmware integrado para o sistema de monitoramento de taludes e encostas "Pendio
 
 O sistema realiza leitura integrada de múltiplos sensores e telemetria em tempo real, com capacidade de alternar entre dois modos de comunicação:
 
-- **Modo LoRaWAN** (Padrão - Produção): Comunicação de longa distância com baixo consumo
-- **Modo Wi-Fi + Firebase** (Protótipo - Desenvolvimento): Comunicação local em tempo real com armazenamento em nuvem
+- **Modo LoRaWAN** (Padrão - Produção Campo): Comunicação de longa distância com baixo consumo
+- **Modo Wi-Fi + Oracle Apex** (Produção/Desenvolvimento): Comunicação local em tempo real com armazenamento em nuvem
 
 | Aspecto | Detalhes |
 |---------|----------|
@@ -36,7 +36,7 @@ O sistema realiza leitura integrada de múltiplos sensores e telemetria em tempo
 ```mermaid
 graph LR
     A["ESP32<br/>(Wemos D1 R32)"] -->|UART1| B["SMW_SX1262M0<br/>(LoRaWAN)"]
-    A -->|Wi-Fi| C["Firebase<br/>RTDB"]
+    A -->|Wi-Fi| C["Oracle Apex<br/>DB"]
     A -->|I2C| D["Sensores<br/>(AHT + BMP)"]
     A -->|RS485| E["SPendio<br/>(3x)"]
     A -->|GPIO| F["Chuva"]
@@ -59,7 +59,7 @@ PendioServidor/
 │   ├── comm/
 │   │   ├── CommunicationHandler.h  # Interface abstrata
 │   │   ├── LoRaHandler.h           # Handler LoRaWAN
-│   │   ├── WiFiHandler.h           # Handler Wi-Fi + Firebase
+│   │   ├── WiFiHandler.h           # Handler Wi-Fi
 │   │   └── credentials.h           # Credenciais (git ignored)
 │   ├── core/
 │   │   ├── state_machine.h         # Máquina de estados
@@ -124,7 +124,7 @@ cd PendioServidor
 # Copie as credenciais
 cp include/comm/credentials.example.h include/comm/credentials.h
 
-# Edite com suas chaves LoRaWAN ou credenciais Wi-Fi/Firebase
+# Edite com suas chaves LoRaWAN ou credenciais Wi-Fi/Oracle Apex
 nano include/comm/credentials.h
 ```
 
@@ -167,13 +167,14 @@ platformio device monitor --baud=115200
 
 **Ativar**: Comente a linha `#define COMMUNICATION_MODE_WIFI` em `system_definitions.h`
 
-### Modo Wi-Fi + Firebase
+### Modo Wi-Fi + Oracle Apex
 
 - **Uso**: Produção, desenvolvimento, testes ou prototipagem
 - **Conectividade**: Wi-Fi local (2.4 GHz)
 - **Alcance**: ~100-200 m (indoors)
 - **Consumo**: Alto (Wi-Fi contínuo)
-- **Overhead**: Médio (HTTP + JSON)
+- **Overhead**: Médio (HTTP + JSON para Oracle Apex)
+- **Armazenamento**: Oracle Apex Database com ORDS endpoint
 
 **Ativar**: Descomente a linha `#define COMMUNICATION_MODE_WIFI` em `system_definitions.h`
 
@@ -185,7 +186,7 @@ Todos os parâmetros se encontram em `include/system_definitions.h`:
 
 ```cpp
 // Modo de operação
-#define COMMUNICATION_MODE_WIFI              // Descomente para Wi-Fi + Firebase
+#define COMMUNICATION_MODE_WIFI              // Descomente para Wi-Fi + Oracle Apex
 
 // Logging
 #define ENABLE_LOGGING                1      // Ativo
@@ -232,12 +233,11 @@ Detalhes em [docs/PROTOCOLO.md](./docs/PROTOCOLO.md)
 // LoRaWAN
 const char APPEUI[] = "APP EUI do sistema Kore";
 const char APPKEY[] = "APP Key do sistema Kore";
-
-// Wi-Fi + Firebase
+Oracle Apex
 const char WIFI_SSID[] = "NomeSuaRede";
 const char WIFI_PASSWORD[] = "SuaSenha";
-const char FIREBASE_API_KEY[] = "API Key do Firebase";
-const char FIREBASE_DB_URL[] = "projeto.firebaseio.com";
+const char API_KEY[] = "API Key do Oracle Apex";
+const char DB_URL[] = "https://oracleapex.com/ords/129169359232537162171/pendio/uplink_handler"; 
 const char DEVICE_ID[] = "PENDIO_001";
 ```
 

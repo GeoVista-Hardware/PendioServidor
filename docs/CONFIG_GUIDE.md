@@ -20,15 +20,15 @@ platformio.ini                    ← Ambiente de build
 ### Selecionar Comunicação
 
 ```cpp
-// Descomente para ativar modo Wi-Fi + Firebase (prototipagem)
-// Comente para usar LoRaWAN (padrão - produção)
+// Descomente para ativar modo Wi-Fi + Oracle Apex
+// Comente para usar LoRaWAN (padrão - campo com longo alcance)
 #define COMMUNICATION_MODE_WIFI
 ```
 
 | Modo | Config | Uso | Consumo |
 |------|--------|-----|---------|
-| **LoRaWAN** | Comentado | Produção em campo | Muito baixo |
-| **Wi-Fi + Firebase** | Descomentado | Desenvolvimento/Testes | Alto |
+| **LoRaWAN** | Comentado | Produção em campo (longo alcance) | Muito baixo |
+| **Wi-Fi + Oracle Apex** | Descomentado | Produção/Desenvolvimento (alcance local) | Alto |
 
 ---
 
@@ -175,17 +175,17 @@ platformio.ini                    ← Ambiente de build
 
 ---
 
-### 2️⃣ Modo Produção (Wi-Fi + Firebase)
+### 2️⃣ Modo Produção (Wi-Fi + Oracle Apex)
 
 ```cpp
-#define COMMUNICATION_MODE_WIFI         // ✅ Use este modo
+#define COMMUNICATION_MODE_WIFI         // Use Wi-Fi
 #define ENABLE_LOGGING              1
 #define LOG_LEVEL_DEFAULT           LOG_LEVEL_INFO
 
 // Configurações LoRa são ignoradas neste modo
 ```
 
-✅ Dados em tempo real no Firebase, testes rápidos
+✅ Dados em tempo real no Oracle Apex Database, testes rápidos
 
 ---
 

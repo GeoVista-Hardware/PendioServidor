@@ -36,7 +36,7 @@ O sistema Pendio implementa uma **arquitetura modular e polimórfica** para supo
 | Implementação | Contexto | Tecnologia | Alcance | Consumo | Status |
 |--------------|---------|------------|---------|---------|--------|
 | `LoRaHandler` | Produção / Campo | SX1262M0 – LoRaWAN | ~15 km | Muito baixo | Implementado 100% |
-| `WiFiHandler` | Protótipo / Desktop | ESP32 Wi-Fi + Firebase RTDB | ~100–200 m | Alto | Implementado 100% |
+| `WiFiHandler` | Produção / Desktop | ESP32 Wi-Fi + Oracle Apex | ~100–200 m | Alto | Implementado 100% |
 
 
 ---
@@ -129,9 +129,9 @@ struct LoRaConfig {
 struct WiFiConfig {
     const char* ssid;                 // SSID da rede
     const char* password;             // Senha Wi-Fi
-    const char* apiKey;               // API Key Firebase
-    const char* databaseUrl;          // URL do Firebase RTDB
-    const char* deviceId;             // Identificador único
+    const char* apexUrl;              // URL do endpoint ORDS Oracle
+    const char* apiKey;               // API KEY para acesso ao endpoint ORDS
+    const char* deviceId;             // Identificador único (DevEUI)
     unsigned long connectTimeout;     // Timeout de conexão (ms)
 };
 ```

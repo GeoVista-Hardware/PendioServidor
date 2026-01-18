@@ -5,7 +5,7 @@
 O sistema Pendio utiliza a interface `CommunicationHandler` como abstração para diferentes meios de comunicação. Atualmente, estão implementados:
 
 - **LoRaHandler**: Comunicação via LoRaWAN (SMW_SX1262M0)
-- **WiFiHandler**: Comunicação via Wi-Fi + Firebase Realtime Database
+- **WiFiHandler**: Comunicação via Wi-Fi + Oracle Apex Database (REST/ORDS)
 
 ---
 
