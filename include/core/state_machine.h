@@ -9,6 +9,8 @@
 
 #include "comm/CommunicationHandler.h"
 
+struct SystemContext;
+
 /**
  * @enum SystemState
  * @brief Estados da máquina de estados principal
@@ -26,7 +28,7 @@ enum SystemState {
  * @param joined Referência para a flag de conexão.
  * @return SystemState Próximo estado.
  */
-SystemState process_state_not_joined(CommunicationHandler* commHandler, bool& joined);
+SystemState process_state_not_joined(CommunicationHandler* commHandler, SystemContext* ctx);
 
 /**
  * @brief Processa o estado STATE_READY.
@@ -34,7 +36,7 @@ SystemState process_state_not_joined(CommunicationHandler* commHandler, bool& jo
  * @param commHandler Ponteiro para o handler de comunicação.
  * @return SystemState Próximo estado.
  */
-SystemState process_state_ready(CommunicationHandler* commHandler);
+SystemState process_state_ready(CommunicationHandler* commHandler, SystemContext* ctx);
 
 /**
  * @brief Processa o estado STATE_WAIT_CFM.
@@ -42,11 +44,16 @@ SystemState process_state_ready(CommunicationHandler* commHandler);
  * @param commHandler Ponteiro para o handler de comunicação.
  * @return SystemState Próximo estado.
  */
-SystemState process_state_wait_cfm(CommunicationHandler* commHandler);
+SystemState process_state_wait_cfm(CommunicationHandler* commHandler, SystemContext* ctx);
 
 /**
  * @brief Redefine a máquina de estados para o estado inicial.
  */
-void reset_state_machine(void);
+void reset_state_machine(SystemContext* ctx);
+
+/**
+ * @brief Executa a lógica da FSM e retorna o tempo para o próximo ciclo.
+ */
+unsigned long fsm_dispatch(SystemContext* ctx, CommunicationHandler* commHandler);
 
 #endif /* _STATE_MACHINE_H */

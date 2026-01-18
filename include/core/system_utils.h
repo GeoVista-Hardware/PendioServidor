@@ -1,13 +1,15 @@
 /**
  * @file system_utils.h
  * @brief Funções auxiliares do sistema (LED, exceções, validações)
- * @copyright Copyright (c) 2025
+ * @copyright Copyright (c) 2026
  */
 
 #ifndef _SYSTEM_UTILS_H
 #define _SYSTEM_UTILS_H
 
 #include <Arduino.h>
+
+struct SystemContext;
 
 // Configurações de Erro e Retentativa
 constexpr int ERROR_RESTART   = 0; // Limpa erros (reinicia o contador)
@@ -39,5 +41,10 @@ uint8_t Validate_Cycle_Time(uint8_t ct);
  * @return uint8_t Configurações validadas.
  */
 uint8_t Validate_Settings(uint8_t st);
+
+/**
+ * @brief Calcula quanto tempo falta para fechar o ciclo de envio.
+ */
+unsigned long calculate_next_cycle(SystemContext* ctx);
 
 #endif /* _SYSTEM_UTILS_H */

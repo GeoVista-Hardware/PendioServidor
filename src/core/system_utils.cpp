@@ -1,28 +1,22 @@
 /**
  * @file system_utils.cpp
  * @brief Implementação das funções auxiliares do sistema
- * @copyright Copyright (c) 2025
+ * @copyright Copyright (c) 2026
  */
 
 #include "core/system_utils.h"
+#include "core/system_context.h"
 #include "system_definitions.h"
 #include "utils/Logger.h"
 #include "hardware_definitions.h"
 #include <EEPROM.h>
 
-// Variável global para armazenar estado do LED
-extern int LedState;
-extern int err_count;
-
-// Ponteiro para a função de reset (software)
-extern void (*reset_function)(void);
-
 /**
  * @brief Alterna o estado do LED de status.
  */
 void ToggleLed(void) {
-  LedState = !LedState; 
-  digitalWrite(MODULE_LED_PIN, LedState);
+  sysContext.ledState = !sysContext.ledState; 
+  digitalWrite(MODULE_LED_PIN, sysContext.ledState);
 }
 
 /**
@@ -33,25 +27,25 @@ void exception_handling(int Exception_code) {
   switch (Exception_code) {
     case ERROR_RESTART:
       // Sucesso: Zera contador de erros
-      err_count = 0;
+      sysContext.errorCount = 0;
       break;
 
     case ERROR_LORAWAN:
       // Processa um erro adicional LoRaWAN
       LOGW("SYSTEM", "Error Code: %d", Exception_code);
-      err_count++;
+      sysContext.errorCount++;
       // Caso o contador de erros exceder o limite de erros consecutivos, força reinício
-      if (err_count > ERROR_MAX_SEQ) {
+      if (sysContext.errorCount > ERROR_MAX_SEQ) {
         LOGE("SYSTEM", "Forced Reset in 30s due to repeated LoRa errors");
         delay(30000);
-        reset_function();
+        ESP.restart();
       }
       break;
 
     case RESTART_REQUEST:
       LOGW("SYSTEM", "Immediate Reset Requested - rebooting in 30s");
       delay(30000);
-      reset_function();
+      ESP.restart();
       break;
 
     default:
@@ -106,4 +100,19 @@ uint8_t Validate_Settings(uint8_t st) {
     EEPROM.write(1, ret); // Settings must be updated in EEPROM.
   #endif
   return(ret);
+}
+
+/**
+ * @brief Calcula quanto tempo falta para fechar o ciclo de envio.
+ */
+unsigned long calculate_next_cycle(SystemContext* ctx) {
+    unsigned long totalCicloMs = (unsigned long)ctx->cycleTimeMinutes * 60000;
+    if (totalCicloMs == 0) totalCicloMs = 180000; // Proteção mínima 3 min
+    
+    unsigned long elapsed = ctx->timenow - ctx->sendTime;
+    
+    if (elapsed < totalCicloMs) {
+        return totalCicloMs - elapsed;
+    }
+    return 0; // Já estourou o tempo, envia já
 }

@@ -34,6 +34,7 @@ Data:  26 de  Abril 2025
 #include "core/system_utils.h"
 #include "core/system_init.h"
 #include "core/state_machine.h"
+#include "core/system_context.h"
 
 // Headers de Comunicação
 #include "comm/CommunicationHandler.h"
@@ -43,6 +44,9 @@ Data:  26 de  Abril 2025
 //*****************************************************************************************
 //  DEFINIÇÕES GLOBAIS E VARIÁVEIS
 //*****************************************************************************************
+
+// Contexto do Sistema (da FSM e dados)
+SystemContext sysContext;
 
 // Interface Serial (Serial1 para o Módulo LoRa)
 HardwareSerial loraSerial(1);
@@ -76,31 +80,6 @@ LoRaConfig loraConfig = {
 // Instância do handler de comunicação
 CommunicationHandler* commHandler = nullptr;
 
-// Estrutura de Dados dos Sensores
-CPendio_LoRa_Sensor_Data_Type CPendio_LoRa_Sensor_Data;
-
-// Configurações da EEPROM
-uint8_t NVM_LoRaWAN_Cycle_Time = 0;
-bool NVM_LoRaWAN_Use_Cfm = false;
-
-// Variáveis de Controle de Tempo
-unsigned long timeout   = 0;
-unsigned long timenow   = 0;
-unsigned long timecycle = 0;
-unsigned long sendTime  = 0;  // Tempo quando a mensagem foi enviada
-
-// Variáveis de Controle
-bool joined     = false;
-int nack_count  = 0;
-int err_count   = 0;
-int LedState    = LOW;
-
-// Máquina de Estados
-uint16_t State = STATE_NOT_JOINED;
-
-// Ponteiro para reset
-void (*reset_function)(void) = 0;
-
 //*****************************************************************************************
 //  SETUP
 //*****************************************************************************************
@@ -124,6 +103,9 @@ void setup() {
   // 4. Inicializa Timers
   initializeTimers();
 
+  // 5. Mensagem de sucesso
+  LOGI("SYSTEM", "Setup do Sistema Concluído. Sistema Iniciado!");
+
 }
 
 //*****************************************************************************************
@@ -139,56 +121,20 @@ void loop() {
 
   // --- Rotina tradicional da FSM ---
 
-  timenow = millis();
+  // Comunicação (Processamento contínuo)
+  if (commHandler) commHandler->process();
 
-  if(((unsigned long)(timeout - timenow)) > ((unsigned long)(-timecycle))) {
-    switch(State) {
-      case STATE_NOT_JOINED:
-        State = process_state_not_joined(commHandler, joined);
-        timecycle = JOIN_TIMEOUT_VALUE;
-        break;
+  // Atualização de Tempo
+  sysContext.timenow = millis();
 
-      case STATE_READY:
-        State = process_state_ready(commHandler);
-        if (State == STATE_WAIT_CFM) {
-          // Marca o tempo de envio para calcular ciclo total depois
-          sendTime = timenow;
-          // Usa timeout de ACK (máximo de espera)
-          unsigned long ackTimeout = commHandler->getConfirmationTimeout();
-          timecycle = ackTimeout;
-        }
-        break;
-
-      case STATE_WAIT_CFM:
-        State = process_state_wait_cfm(commHandler);
-        if (State == STATE_READY) {
-          // Calcula tempo restante para completar o ciclo total
-          unsigned long totalCicloMs = (unsigned long)NVM_LoRaWAN_Cycle_Time * 60000;
-          if (totalCicloMs == 0) totalCicloMs = 180000; // Mínimo 3 minutos
-          
-          unsigned long elapsedSinceSend = timenow - sendTime;
-          unsigned long remainingMs = (elapsedSinceSend < totalCicloMs) ? 
-                                       (totalCicloMs - elapsedSinceSend) : 0;
-          
-          LOGD("SYSTEM", "Ciclo: Enviado há %lu ms, restam %lu ms (total %lu ms)", 
-               elapsedSinceSend, remainingMs, totalCicloMs);
-          
-          timecycle = remainingMs;
-        } else {
-          timecycle = 5000;  // Se ainda aguardando, tenta de novo em 5s
-        }
-        break;
-
-      default:
-        reset_state_machine();
-        timecycle = JOIN_TIMEOUT_VALUE;
-        break;
-    }
-
-    // Processamento contínuo (necessário para o Firebase manter token vivo)
-    commHandler->process();
-
-    timeout = timenow + timecycle;
+  // Máquina de Estados (executa apenas se o timer expirou)
+  if (sysContext.isTimerExpired()) {
+      
+      // Executa a lógica e recebe o tempo para a próxima execução
+      unsigned long nextDelay = fsm_dispatch(&sysContext, commHandler);
+      
+      // Agenda o próximo ciclo
+      sysContext.setNextTimeout(nextDelay);
 
   }
 

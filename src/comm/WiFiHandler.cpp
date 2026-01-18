@@ -77,7 +77,6 @@ bool WiFiHandler::connect() {
     unsigned long start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < config.connectTimeout) {
         delay(500);
-        Serial.print(".");
         esp_task_wdt_reset();
     }
     Serial.println();

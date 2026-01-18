@@ -1,12 +1,13 @@
 /**
  * @file system_init.cpp
  * @brief Implementação das funções de inicialização do sistema
- * @copyright Copyright (c) 2025
+ * @copyright Copyright (c) 2026
  */
 
 #include <esp_task_wdt.h>
 #include "core/system_init.h"
 #include "core/system_utils.h"
+#include "core/system_context.h"
 #include "system_definitions.h"
 #include "comm/credentials.h"
 #include "utils/Logger.h"
@@ -15,12 +16,10 @@
 #include <EEPROM.h>
 #include <HardwareSerial.h>
 
-// Declarações externas
+// Declarações 
+extern SystemContext sysContext;
 extern HardwareSerial loraSerial;
 extern LoRaConfig loraConfig;
-extern uint8_t NVM_LoRaWAN_Cycle_Time;
-extern bool NVM_LoRaWAN_Use_Cfm;
-extern CPendio_LoRa_Sensor_Data_Type CPendio_LoRa_Sensor_Data;
 
 #ifdef COMMUNICATION_MODE_WIFI
 extern WiFiConfig wifiConfig;
@@ -133,7 +132,7 @@ void initializeSensorData(void) {
   LOGI("SYSTEM", "Versão: %s", Versao);
   LOGI("SYSTEM", "Data: %s", Data);
 
-  iniSensores(CPendio_LoRa_Sensor_Data.d);
+  iniSensores(sysContext.sensorData.d);
 }
 
 /**
@@ -142,19 +141,19 @@ void initializeSensorData(void) {
  */
 CommunicationHandler* initializeCommunicationHandler(void) {
   LOGI("COMM", "Inicializando handler de comunicação...");
-  LOGI("COMM", "Frame size: %u", (unsigned)sizeof(CPendio_LoRa_Sensor_Data));
+  LOGI("COMM", "Frame size: %u", (unsigned)sizeof(sysContext.sensorData));
 
   // Leitura da EEPROM (comum aos dois modos)
   #ifdef USE_EEPROM
-    NVM_LoRaWAN_Cycle_Time = EEPROM.read(0);
-    NVM_LoRaWAN_Use_Cfm = (NVM_SETTINGS_CFM_BIT == (EEPROM.read(1) & NVM_SETTINGS_CFM_BIT));
+    sysContext.cycleTimeMinutes = EEPROM.read(0);
+    sysContext.useConfirmation = (NVM_SETTINGS_CFM_BIT == (EEPROM.read(1) & NVM_SETTINGS_CFM_BIT));
   #else
-    NVM_LoRaWAN_Cycle_Time = CYCLE_DEFAULT_MIN; // CYCLE_DEFAULT_MIN = 15 (pode ser alterado)
-    NVM_LoRaWAN_Use_Cfm = true;
+    sysContext.cycleTimeMinutes = CYCLE_DEFAULT_MIN;
+    sysContext.useConfirmation = true;
   #endif
 
-  NVM_LoRaWAN_Cycle_Time = Validate_Cycle_Time(NVM_LoRaWAN_Cycle_Time);
-  LOGI("SYSTEM", "Tempo de Ciclo Configurado: %d min", NVM_LoRaWAN_Cycle_Time);
+  sysContext.cycleTimeMinutes = Validate_Cycle_Time(sysContext.cycleTimeMinutes);
+  LOGI("SYSTEM", "Tempo de Ciclo Configurado: %d min", sysContext.cycleTimeMinutes);
 
   // Seleção do modo
   CommunicationHandler* handler = nullptr;
@@ -164,14 +163,14 @@ CommunicationHandler* initializeCommunicationHandler(void) {
     handler = new WiFiHandler(wifiConfig);
   #else
     LOGI("COMM", "MODO LORAWAN");
-    loraConfig.useConfirmation = NVM_LoRaWAN_Use_Cfm;
+    loraConfig.useConfirmation = sysContext.useConfirmation;
     handler = new LoRaHandler(loraConfig);
   #endif
 
   // Inicializar handler
   if (!handler->begin()) {
     LOGE("COMM", "Falha ao inicializar handler de comunicação");
-    while(1) { delay(1000); }
+    while(1) delay(1000); 
   }
 
   // Bloco específico para LoRa (DevEUI)
@@ -196,11 +195,9 @@ CommunicationHandler* initializeCommunicationHandler(void) {
  */
 void initializeTimers(void) {
   // Define TIMERS iniciais com base no JOIN
-  extern unsigned long timeout;
-  extern unsigned long timecycle;
-
-  timeout = millis() + JOIN_TIMEOUT_VALUE;
-  timecycle = JOIN_TIMEOUT_VALUE;
+  sysContext.timenow = millis();
+  sysContext.timeout = sysContext.timenow + JOIN_TIMEOUT_VALUE;
+  sysContext.timecycle = JOIN_TIMEOUT_VALUE;
 
   LOGI("INIT", "Timers inicializados");
 }
