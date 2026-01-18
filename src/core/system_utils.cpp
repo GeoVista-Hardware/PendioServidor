@@ -68,13 +68,30 @@ void exception_handling(int Exception_code) {
 uint8_t Validate_Cycle_Time(uint8_t ct) {
   unsigned char ret;
   switch (ct) {
-    case 0: ret = 1; break; // Modo Debug (1 min)
-    case 5: case 10: case 15: case 30: case 60: ret = ct; break;
-    default: ret = 15; break; // Padrão (15 min)
+    case 0:               
+      ret = CYCLE_DEBUG_MIN; // 1 min
+      break; 
+      
+    // Adicionado o caso de 3 minutos que você precisava
+    case CYCLE_FAST_MIN:    // 3 min
+    case CYCLE_SHORT_MIN:   // 5 min
+    case CYCLE_MEDIUM_MIN:  // 10 min
+    case CYCLE_DEFAULT_MIN: // 15 min
+    case CYCLE_LONG_MIN:    // 30 min
+    case CYCLE_XLONG_MIN:   // 60 min
+      ret = ct; 
+      break;
+      
+    default: 
+      // Se vier qualquer coisa diferente (ex: 255 ou 7), joga para o default de 15
+      ret = CYCLE_DEFAULT_MIN; 
+      break; 
   }
+  
   #ifdef USE_EEPROM
-    EEPROM.write(0, ret); // Cycle time must be store in EEPROM.
+    EEPROM.write(0, ret); // Grava o valor validado de volta para garantir integridade
   #endif
+  
   return(ret);
 }
 

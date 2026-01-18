@@ -111,7 +111,7 @@ CommunicationHandler* initializeCommunicationHandler(void) {
     NVM_LoRaWAN_Cycle_Time = EEPROM.read(0);
     NVM_LoRaWAN_Use_Cfm = (NVM_SETTINGS_CFM_BIT == (EEPROM.read(1) & NVM_SETTINGS_CFM_BIT));
   #else
-    NVM_LoRaWAN_Cycle_Time = 4;  // 4 minutos para acomodar até 3min de ACK do LoRa
+    NVM_LoRaWAN_Cycle_Time = CYCLE_DEFAULT_MIN; // CYCLE_DEFAULT_MIN = 15 (pode ser alterado)
     NVM_LoRaWAN_Use_Cfm = true;
   #endif
 

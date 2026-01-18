@@ -92,9 +92,6 @@ typedef unsigned short ushort;
 // Comente para desativar
 #define USE_EEPROM
 
-/** @brief Ativa simulação de JOIN para testes sem hardware */
-#define ENABLE_FAKE_JOIN            0
-
 /** @brief Bit de CFM em EEPROM (NVM settings) */
 #define NVM_SETTINGS_CFM_BIT        0x01
 
@@ -206,21 +203,29 @@ typedef unsigned short ushort;
 #define MAX_SEQUENTIAL_ERRORS       10
 
 // ============================================================================
-// DESENVOLVIMENTO - DEBUG
+// CONFIGURAÇÃO DE CICLOS (TIMING)
 // ============================================================================
 
 /**
- * @section DEBUG Debug e Teste
+ * @section TIMING Sistema
  */
 
-/** @brief Modo debug: logging verboso */
-#define DEBUG_MODE                  0
+/** @brief Tempo de ciclo para Debug (1 min) */
+#define CYCLE_DEBUG_MIN     1
 
-/** @brief Modo teste: desabilita certas funcionalidades */
-#define TEST_MODE                   0
+/** @brief Tempo de ciclo Ideal/Rápido (3 min) */
+#define CYCLE_FAST_MIN      3
 
-/** @brief Simula downlinks para testes */
-#define SIMULATE_DOWNLINKS          0
+/** @brief Tempos intermediários permitidos */
+#define CYCLE_SHORT_MIN     5
+#define CYCLE_MEDIUM_MIN    10
+
+/** @brief Tempo de ciclo Padrão/Default (15 min) */
+#define CYCLE_DEFAULT_MIN   15
+
+/** @brief Ciclos longos */
+#define CYCLE_LONG_MIN      30
+#define CYCLE_XLONG_MIN     60
 
 // ============================================================================
 // VALIDAÇÃO EM TEMPO DE COMPILAÇÃO
