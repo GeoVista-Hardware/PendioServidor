@@ -4,6 +4,7 @@
  * @copyright Copyright (c) 2025
  */
 
+#include <esp_task_wdt.h>
 #include "core/system_init.h"
 #include "core/system_utils.h"
 #include "system_definitions.h"
@@ -35,6 +36,26 @@ void initializeHardware(void) {
   // Inicializa o LED da placa LoRaWAN
   pinMode(MODULE_LED_PIN, OUTPUT);
   ToggleLed();
+
+  // Lógica do WatchDog Timer (WDT)
+  #if ENABLE_WATCHDOG
+
+    LOGI("INIT", "Inicializando Watchdog...");
+
+    // O segundo parâmetro 'true' indica que deve resetar se estourar
+    esp_task_wdt_init(WATCHDOG_TIMEOUT / 1000, true);
+    
+    // Adiciona a tarefa atual (Main Loop) ao monitoramento do WDT
+    esp_task_wdt_add(NULL);
+
+    // Mensagem de inicialização
+    LOGI("INIT", "Watchdog Ativo: %d segundos", WATCHDOG_TIMEOUT / 1000);
+
+  #else
+
+    LOGW("INIT", "Watchdog DESABILITADO");
+  
+  #endif
 
   LOGI("INIT", "Hardware inicializado");
 }

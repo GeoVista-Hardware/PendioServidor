@@ -70,7 +70,7 @@ typedef unsigned short ushort;
 
 /** @brief Define se usará API KEY para autenticação */
 // Descomente a linha abaixo para ativar a autenticação via API Key
-// Comente para compilar a versão com autenticação
+// Comente para compilar a versão sem autenticação
 #define WIFI_USE_API_KEY
 
 /** @brief Ativa logging serial estruturado (RECOMENDADO) */
@@ -161,11 +161,12 @@ typedef unsigned short ushort;
 
 
 /** @brief Watchdog timer habilitado */
-#define ENABLE_WATCHDOG             0
+#define ENABLE_WATCHDOG             1
 
-/** @brief Intervalo watchdog [ms] */
-#define WATCHDOG_TIMEOUT            30000
-
+/** @brief Intervalo watchdog [ms] 
+ *  @note O timeout deve ser maior que JOIN_TIMEOUT (45s - default)
+*/
+#define WATCHDOG_TIMEOUT            60000
 
 // ============================================================================
 // CONFIGURAÇÃO DE CICLOS (TIMING)

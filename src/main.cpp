@@ -22,6 +22,7 @@ Data:  26 de  Abril 2025
 #include <Arduino.h>
 #include <HardwareSerial.h>
 #include <EEPROM.h>
+#include <esp_task_wdt.h>
 
 // Headers de Configuração
 #include "system_definitions.h"
@@ -129,6 +130,14 @@ void setup() {
 //  LOOP de EXECUÇÃO da MÁQUINA DE ESTADOS
 //*****************************************************************************************
 void loop() {
+
+  // --- Alimenta o WatchDog Timer (WDT) ---
+  
+  #if ENABLE_WATCHDOG
+    esp_task_wdt_reset();
+  #endif
+
+  // --- Rotina tradicional da FSM ---
 
   timenow = millis();
 
