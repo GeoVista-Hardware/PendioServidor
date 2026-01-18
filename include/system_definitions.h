@@ -21,11 +21,6 @@
 // MACROS GERAIS
 // ============================================================================
 
-#define ON    1
-#define OFF   0
-#define LIGA  1
-#define DESLIGA 0
-
 #define CR 0x0D
 #define LF 0x0A
 
@@ -104,17 +99,8 @@ typedef unsigned short ushort;
  */
 
 /** @brief Timeout para OTAA Join [ms] */
-#define JOIN_TIMEOUT_VALUE          45000                 // 45 segundos - balanço entre permitir JOIN lento e não esperar demais
-
-/** @brief Timeout para aguardar ACK/CFM [ms] - DEPRECADO: usar getConfirmationTimeout() */
-#define CFM_TIMEOUT_VALUE           180000                // OBSOLETO: cada handler define seu próprio timeout
-
-/** @brief Intervalo mínimo entre mensagens [ms] */
-#define NEXT_MSG_TIMEOUT_VALUE      20000                 // 20 segundos (teste)
-// #define NEXT_MSG_TIMEOUT_VALUE   1800000               // 30 minutos (produção)
-
-/** @brief Também suportado por legado: NXTMSG_TIMEOUT_VALUE */
-#define NXTMSG_TIMEOUT_VALUE        NEXT_MSG_TIMEOUT_VALUE
+// 45 segundos - balanço entre permitir JOIN lento e não esperar demais
+#define JOIN_TIMEOUT_VALUE          45000                          
 
 // ============================================================================
 // LoRaWAN - CONFIGURAÇÃO DE TRANSMISSÃO
@@ -166,32 +152,13 @@ typedef unsigned short ushort;
 #define SENSOR_BATTERY_ENABLED      1
 
 // ============================================================================
-// HARDWARE - PINOS
-// ============================================================================
-
-/**
- * @section HARDWARE Mapeamento de Pinos
- */
-
-/** @brief LED do módulo (ESP32 DOIT V1: GPIO 2) */
-#define PIN_LED                     2
-
-/** @brief Serial LoRaWAN (Serial1: TX=GPIO17, RX=GPIO16) */
-#define LORA_SERIAL_PORT            1
-
-/** @brief Serial LoRaWAN TX power (dBm): 2-20 */
-#define LORA_TX_POWER               20
-
-// ============================================================================
 // SISTEMA - GERENCIAMENTO
 // ============================================================================
 
 /**
- * @section SYSTEM Sistema
+ * @section WDT Sistema
  */
 
-/** @brief Stack trace em caso de erro (DEBUG) */
-#define ENABLE_STACK_TRACE          0
 
 /** @brief Watchdog timer habilitado */
 #define ENABLE_WATCHDOG             0
@@ -199,8 +166,6 @@ typedef unsigned short ushort;
 /** @brief Intervalo watchdog [ms] */
 #define WATCHDOG_TIMEOUT            30000
 
-/** @brief Reinicia automaticamente após N erros sequenciais */
-#define MAX_SEQUENTIAL_ERRORS       10
 
 // ============================================================================
 // CONFIGURAÇÃO DE CICLOS (TIMING)

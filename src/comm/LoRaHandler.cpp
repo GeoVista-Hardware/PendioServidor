@@ -294,7 +294,7 @@ void LoRaHandler::process() {
     // Verifica timeouts
     if (currentState == ConnectionState::WAITING_CONFIRMATION) {
         unsigned long elapsed = millis() - lastSendTime;
-        unsigned long timeout = config.confirmTimeout ? config.confirmTimeout : DEFAULT_CFM_TIMEOUT;
+        unsigned long timeout = getConfirmationTimeout() ? getConfirmationTimeout() : DEFAULT_CFM_TIMEOUT;
 
         if (elapsed > timeout) {
             if (retryCount++ < config.maxRetries) {

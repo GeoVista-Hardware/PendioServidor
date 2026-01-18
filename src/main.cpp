@@ -55,7 +55,6 @@ LoRaConfig loraConfig = {
     .useADR = LORA_ADR_ON,
     .fixedDR = LORA_FIXED_DR,
     .joinTimeout = JOIN_TIMEOUT_VALUE,
-    .confirmTimeout = CFM_TIMEOUT_VALUE,
     .maxRetries = 3
 };
 
