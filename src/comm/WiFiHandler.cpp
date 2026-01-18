@@ -1,27 +1,14 @@
 /**
  * @file WiFiHandler.cpp
- * @brief Implementação do handler Wi-Fi usando Firebase Realtime Database
- * @details Converte payloads binários em strings HEX e envia para o Firebase,
- * simulando um uplink LoRaWAN.
- * @copyright Copyright (c) 2026
+ * @brief Implementação do handler Wi-Fi para Oracle APEX
  */
 
-// Includes da aplicação
-
 #include "comm/WiFiHandler.h"
-#include "utils/Logger.h" 
-
-// Addons da biblioteca Firebase
-
-#include "addons/TokenHelper.h"
-#include "addons/RTDBHelper.h"
-
-// Funções de manipulação de caracteres
-
+#include "utils/Logger.h"
+#include "system_definitions.h"
 #include <ctype.h>
 
-// Função auxiliar
-
+// Função auxiliar (mantida do original)
 uint8_t hexToByte(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
@@ -29,7 +16,36 @@ uint8_t hexToByte(char c) {
     return 0;
 }
 
-// Construtor de WiFiHandler
+struct ParsedUrl {
+    String host;
+    String path;
+    uint16_t port;
+};
+
+ParsedUrl parseUrl(const String& url) {
+    ParsedUrl result;
+    result.port = 443; // default HTTPS
+
+    String temp = url;
+
+    if (temp.startsWith("https://")) {
+        temp.remove(0, 8);
+    } else if (temp.startsWith("http://")) {
+        temp.remove(0, 7);
+        result.port = 80;
+    }
+
+    int slashIndex = temp.indexOf('/');
+    if (slashIndex >= 0) {
+        result.host = temp.substring(0, slashIndex);
+        result.path = temp.substring(slashIndex);
+    } else {
+        result.host = temp;
+        result.path = "/";
+    }
+
+    return result;
+}
 
 WiFiHandler::WiFiHandler(const WiFiConfig& cfg)
     : config(cfg),
@@ -37,59 +53,26 @@ WiFiHandler::WiFiHandler(const WiFiConfig& cfg)
       _isConfirmed(false) {
 }
 
-// Inicialização das configs da lib (sem conectar ainda)
 bool WiFiHandler::begin() {
-
-    LOGI("WiFi", "Inicializando WiFiHandler (Modo Firebase)...");
-
-    // Configurações obrigatórias da biblioteca Firebase
-    fconfig.api_key = config.apiKey;
-    fconfig.database_url = config.databaseUrl;
-
-    // Callback para status do token
-    fconfig.token_status_callback = tokenStatusCallback; 
-
-    // Login do usuário no Firebase (pode ser anônimo ou com email/senha)
-    auth.user.email = "admin@pendio.com";
-    auth.user.password = "pendio123";
-
-    // Realiza o sign-up (registro) se necessário
-    Firebase.signUp(&fconfig, &auth, "", "");
-
-    // Registra o estado inicial
+    LOGI("WiFi", "Inicializando WiFiHandler (Modo Oracle APEX)...");
     currentState = ConnectionState::DISCONNECTED;
-
-    // Sucesso
     return true;
-
 }
 
-// Encerramento
 void WiFiHandler::end() {
-
-    // Desconecta do Firebase
     WiFi.disconnect(true);
-
-    // Atualiza o estado
     currentState = ConnectionState::DISCONNECTED;
-
-    // Informa o encerramento
     LOGI("WiFi", "WiFi Desconectado.");
-
 }
 
-// Conexão efetiva (Wi-Fi + Firebase)
 bool WiFiHandler::connect() {
-
-    // Se já estiver tudo pronto, retorna true
     if (isConnected()) return true;
 
-    // Atualiza o estado para conexão Wi-Fi
     currentState = ConnectionState::CONNECTING;
     LOGI("WiFi", "Conectando ao SSID: %s", config.ssid);
+    
     WiFi.begin(config.ssid, config.password);
 
-    // Loop de espera com timeout
     unsigned long start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < config.connectTimeout) {
         delay(500);
@@ -97,185 +80,187 @@ bool WiFiHandler::connect() {
     }
     Serial.println();
 
-    // Verifica se conectou à rede com sucesso
     if (WiFi.status() == WL_CONNECTED) {
         LOGI("WiFi", "Conectado! IP: %s", WiFi.localIP().toString().c_str());
-        
-        // Inicializa o objeto Firebase
-        Firebase.begin(&fconfig, &auth);
-        
-        // Mantém a conexão Wi-Fi ativa automaticamente
-        Firebase.reconnectWiFi(true);
-        
-        // Atualiza o estado para conectado
         currentState = ConnectionState::CONNECTED;
         return true;
-
     } 
 
-    // Falha na conexão informada por timeout
     LOGE("WiFi", "Timeout: Falha ao conectar no Wi-Fi");
-
-    // Estado de erro na conexão Wi-Fi
     currentState = ConnectionState::ERROR;
     return false;
-
 }
 
-// Verifica status
 bool WiFiHandler::isConnected() {
-
-    // Consideramos conectado se temos Wi-Fi e a lib do Firebase está pronta
-    return (WiFi.status() == WL_CONNECTED && Firebase.ready());
-
+    return (WiFi.status() == WL_CONNECTED);
 }
 
-// Envio de Dados (Uplink)
 SendResult WiFiHandler::send(uint8_t port, const uint8_t* data, uint16_t length) {
-
-    // Verifica se a conexão está ativa
     if (!isConnected()) return SendResult::NOT_CONNECTED;
 
-    // Caminho no Realtime Database para uplinks
-    String path = "/devices/";
-    path += config.deviceId;
-    path += "/uplinks";
-
-    // --- CONFIGURAÇÃO DO FORMATO DO PAYLOAD ---
-    // O 'data' que chega aqui é uma String Hex (ex: "0100...").
-    // É convertido de volta para Binário antes de gerar o Base64.
-    
-    // Calcular o tamanho real em bytes (cada 2 chars hex = 1 byte)
-    // Usamos strnlen para ignorar o null terminator se houver
+    // 1. Processamento do Payload 
     size_t hexLen = strnlen((const char*)data, length);
-    if (hexLen % 2 != 0) hexLen--; // Garante paridade
+    if (hexLen % 2 != 0) hexLen--; 
     
     size_t binLen = hexLen / 2;
     uint8_t* binBuffer = new uint8_t[binLen];
 
-    // Converter Hex String -> Binário (Decode)
     for (size_t i = 0; i < binLen; i++) {
         char high = (char)data[2 * i];
         char low = (char)data[2 * i + 1];
         binBuffer[i] = (hexToByte(high) << 4) | hexToByte(low);
     }
 
-    // Gerar o Base64 a partir do Binário (Encode)
     String base64Payload = base64::encode(binBuffer, binLen);
-    
-    // Limpa a memória temporária
     delete[] binBuffer;
-    
-    // --- REALIZA O ENVIO PARA O FIREBASE ---
 
-    // Monta o JSON para envio
-    FirebaseJson json;
-    json.set("port", port);
-    json.set("payload", base64Payload); 
-    
-    // Campos de metadados
-    json.set("fcnt", (int)(millis()/1000));
-    json.set("timestamp", millis());
-    json.set("rssi", -50);
-    json.set("snr", 9.5);
+    // 2. Montagem do JSON
+    String jsonPayload = "{";
+    jsonPayload += "\"meta\": {";
+    jsonPayload += "\"time\": " + String(millis()) + ",";
+    jsonPayload += "\"packet_id\": " + String(millis()/1000) + ",";
+    jsonPayload += "\"device_name\": \"PendioSensor\",";
+    jsonPayload += "\"device\": \"" + String(config.deviceId) + "\"";
+    jsonPayload += "},";
+    jsonPayload += "\"params\": {";
+    jsonPayload += "\"payload\": \"" + base64Payload + "\",";
+    jsonPayload += "\"encrypted_payload\": \"" + base64Payload + "\",";
+    jsonPayload += "\"duplicate\": \"false\"";
+    jsonPayload += "}";
+    jsonPayload += "}";
 
-    // Informa o envio (com debug)
-    LOGD("WiFi", "Enviando %d bytes (Base64: %s)", binLen, base64Payload.c_str());
+    LOGD("WiFi", "Enviando JSON para Oracle...");
 
-    // Realiza o push no Firebase (uplink)
-    if (Firebase.RTDB.pushJSON(&fbdo, path.c_str(), &json)) {
+    // 3. Configuração e Envio
 
-        LOGI("WiFi", "Envio Sucesso! Chave: %s", fbdo.pushName().c_str());
-        _isConfirmed = true; 
-        currentState = ConnectionState::WAITING_CONFIRMATION;
-        return SendResult::SUCCESS;
+    ParsedUrl url = parseUrl(config.apexUrl);
+    WiFiClientSecure client;
+    client.setInsecure();
+    client.setTimeout(config.connectTimeout);
 
-    } else {
-
-        // Caso de erro no envio para o Firebase
-        LOGE("WiFi", "Erro no envio: %s", fbdo.errorReason().c_str());
+    if (!client.connect(url.host.c_str(), url.port)) {
+        LOGE("WiFi", "Falha ao conectar no servidor %s", url.host.c_str());
         return SendResult::FAILED;
-
     }
+
+    String request =
+        "POST " + url.path + " HTTP/1.1\r\n"
+        "Host: " + url.host + "\r\n"
+    #ifdef WIFI_USE_API_KEY
+        "X-API-Key: " + String(config.apiKey) + "\r\n"
+    #endif
+        "Content-Type: application/json\r\n"
+        "Content-Length: " + String(jsonPayload.length()) + "\r\n"
+        "Connection: close\r\n\r\n" +
+        jsonPayload;
+
+    client.print(request);
+
+    String statusLine = client.readStringUntil('\n');
+    statusLine.trim();
+    LOGD("WiFi", "HTTP Status: %s", statusLine.c_str());
+
+    LOGD("WiFi", "HTTP Status: %s", statusLine.c_str());
+
+    while (client.connected()) {
+        String line = client.readStringUntil('\n');
+        if (line == "\r" || line.length() == 0) {
+            break; // fim dos headers
+        }
+    }
+
+    String responseBody;
+    unsigned long start = millis();
+
+    while (client.connected() && millis() - start < 3000) {
+        while (client.available()) {
+            responseBody += (char)client.read();
+        }
+    }
+
+    responseBody.trim();
+
+    String cleanBody;
+    for (size_t i = 0; i < responseBody.length(); i++) {
+        char c = responseBody[i];
+        if (c >= 32 && c <= 126) {  // ASCII imprimível
+            cleanBody += c;
+        }
+    }
+
+    responseBody = cleanBody;
+
+    LOGD("WiFi", "HTTP Body: %s", responseBody.c_str());
+
+    if (responseBody.length() == 0) {
+        LOGE("WiFi", "Resposta vazia do servidor");
+        client.stop();
+        return SendResult::FAILED;
+    }
+
+    if (responseBody.indexOf("\"erro\"") >= 0) {
+        LOGE("WiFi", "Erro retornado pelo servidor: %s", responseBody.c_str());
+        client.stop();
+        return SendResult::FAILED;
+    }
+
+    LOGI("WiFi", "POST aceito pelo servidor");
+    client.stop();
+
+    _isConfirmed = true;
+    currentState = ConnectionState::WAITING_CONFIRMATION;
+    return SendResult::SUCCESS;
 
 }
 
-// Verifica confirmação (ACK)
 bool WiFiHandler::isConfirmed() {
-
-    // Como o envio HTTP é síncrono, se _isConfirmed está true, é porque já foi confirmado.
     if (_isConfirmed) {
-
-        _isConfirmed = false; // Limpa a flag
-        currentState = ConnectionState::CONNECTED; // Volta ao estado pronto
+        _isConfirmed = false;
+        currentState = ConnectionState::CONNECTED;
         return true;
-
     }
-
     return false;
-
 }
 
-// Recepção de Downlinks (Mock)
 ReceiveResult WiFiHandler::receive(DownlinkMessage& message) {
-
-    // TODO: Futuramente, pode implementar um listener (stream) no caminho:
-    // /devices/{deviceId}/downlinks
-    
-    // Por enquanto, retorna vazio para não travar o loop
+    // Implementação futura de downlink via GET se necessário
     return ReceiveResult::NO_MESSAGE;
-
 }
 
-// Getters de Estado
 ConnectionState WiFiHandler::getConnectionState() {
     return currentState;
 }
 
 const char* WiFiHandler::getStateString() {
-
     switch (currentState) {
-
         case ConnectionState::DISCONNECTED:         return "WIFI_DISCONNECTED";
         case ConnectionState::CONNECTING:           return "WIFI_CONNECTING";
         case ConnectionState::CONNECTED:            return "WIFI_CONNECTED";
         case ConnectionState::WAITING_CONFIRMATION: return "WIFI_WAIT_CFM";
         case ConnectionState::ERROR:                return "WIFI_ERROR";
         default:                                    return "UNKNOWN";
-
     }
-
 }
 
-// Processamento recorrente
 void WiFiHandler::process() {
     updateState();
 }
 
-// Atualização de estado baseada no hardware
 void WiFiHandler::updateState() {
-
-    // Se o Wi-Fi cair, atualiza o estado para forçar reconexão se necessário
     if (WiFi.status() != WL_CONNECTED) {
         if (currentState != ConnectionState::DISCONNECTED) {
             LOGW("WiFi", "Conexão perdida!");
             currentState = ConnectionState::DISCONNECTED;
         }
-    } 
-    else if (currentState == ConnectionState::DISCONNECTED && Firebase.ready()) {
+    } else if (currentState == ConnectionState::DISCONNECTED) {
         currentState = ConnectionState::CONNECTED;
     }
-    
 }
 
-// Implementação do Base64 usando a lib nativa
 String WiFiHandler::bufferToBase64(const uint8_t* data, uint16_t length) {
-    // Wrapper simples para a função da biblioteca
     return base64::encode(data, length);
 }
 
-// Obtém o timeout apropriado para WiFi
 unsigned long WiFiHandler::getConfirmationTimeout() {
-    // WiFi é instantâneo, timeout curto é suficiente
-    return 10000;  // 10 segundos
+    return 10000;
 }

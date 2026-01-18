@@ -69,15 +69,20 @@ typedef unsigned short ushort;
  */
 
 /** @brief Define o modo de comunicação */
-// Descomente a linha abaixo para ativar o modo Protótipo (Wi-Fi + Firebase)
+// Descomente a linha abaixo para ativar o modo Wi-Fi
 // Comente para compilar a versão LoRaWAN
-// #define COMMUNICATION_MODE_WIFI 
+#define COMMUNICATION_MODE_WIFI 
+
+/** @brief Define se usará API KEY para autenticação */
+// Descomente a linha abaixo para ativar a autenticação via API Key
+// Comente para compilar a versão com autenticação
+#define WIFI_USE_API_KEY
 
 /** @brief Ativa logging serial estruturado (RECOMENDADO) */
 #define ENABLE_LOGGING              1
 
 /** @brief Nível padrão de log (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR) */
-#define LOG_LEVEL_DEFAULT           LOG_LEVEL_INFO
+#define LOG_LEVEL_DEFAULT           0
 
 /** @brief Baudrate serial para logs */
 #define SERIAL_BAUDRATE             115200

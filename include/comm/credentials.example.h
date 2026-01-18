@@ -31,12 +31,11 @@ const char WIFI_SSID[] = "Nome da sua rede Wi-Fi";
 const char WIFI_PASSWORD[] = "Senha da sua rede Wi-Fi";
 
 // ============================================================================
-// CREDENCIAIS FIREBASE (Modo Protótipo - PROTOTYPE_MODE_WIFI)
+// CREDENCIAIS DB WI-FI
 // ============================================================================
-// Obtidas no Console do Firebase (Project Settings -> Service Accounts)
 
-const char FIREBASE_API_KEY[] = "Sua API Key do Firebase aqui";
-const char FIREBASE_DB_URL[] = "seu-projeto.firebaseio.com"; 
+const char API_KEY[] = "Sua API Key do Oracle Apex aqui";
+const char DB_URL[] = "URL do Oracle Apex"; 
 
 // Identificador único do dispositivo (simula o DevEUI no LoRaWAN)
 const char DEVICE_ID[] = "ESP32_PENDIO_IDENTIFICADOR";

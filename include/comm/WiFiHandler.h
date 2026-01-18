@@ -1,176 +1,155 @@
 /**
  * @file WiFiHandler.h
- * @brief Handler de comunicação Wi-Fi com implementação Firebase Realtime Database.
- * @details Este arquivo define a classe WiFiHandler, que implementa a interface 
- * CommunicationHandler. Ele utiliza o Firebase RTDB para simular o envio 
- * de pacotes de telemetria (análogo ao LoRaWAN) via Wi-Fi.
+ * @brief Handler de comunicação Wi-Fi para Oracle APEX (REST).
+ * @details Implementa a interface CommunicationHandler para comunicação via Wi-Fi.
+ *          Envia uplinks via HTTP POST formatados em JSON para a procedure GRAVA_UPLINK
+ *          do Oracle APEX através do endpoint ORDS.
+ * @author Sistema de Monitoramento
  * @copyright Copyright (c) 2026
  */
 
 #ifndef _WIFI_HANDLER_H
 #define _WIFI_HANDLER_H
 
-// Inclui a interface base
 #include "comm/CommunicationHandler.h"
-
-// Includes do Framework e Wi-Fi
 #include <Arduino.h>
 #include <WiFi.h>
-
-// Includes da Biblioteca Firebase (Mobizt)
-#include <Firebase_ESP_Client.h>
-
-// Codificação Base64 (para conversão de payloads)
-#include <base64.h>
+#include <HTTPClient.h>           ///< Biblioteca nativa para requisições HTTP
+#include <base64.h>               ///< Para codificação do payload em Base64
 
 /**
  * @struct WiFiConfig
- * @brief Estrutura de configuração para o Handler Wi-Fi/Firebase.
- * @details Contém todas as credenciais e parâmetros necessários para estabelecer
- * a conexão Wi-Fi e autenticar no projeto Firebase.
+ * @brief Estrutura de configuração para o handler Wi-Fi.
+ * @details Contém todos os parâmetros necessários para configurar a conexão Wi-Fi
+ *          e comunicação com o servidor Oracle APEX.
  */
 struct WiFiConfig {
-    const char* ssid;               /**< @brief SSID (Nome) da rede Wi-Fi. */
-    const char* password;           /**< @brief Senha da rede Wi-Fi. */
-    const char* apiKey;             /**< @brief API Key do projeto Firebase. */
-    const char* databaseUrl;        /**< @brief URL do Realtime Database (ex: https://x.firebaseio.com). */
-    const char* deviceId;           /**< @brief Identificador do dispositivo (simula o DevEUI) para organizar os dados no banco. */
-    unsigned long connectTimeout;   /**< @brief Tempo máximo (ms) para aguardar a conexão Wi-Fi antes de dar timeout. */
+    const char* ssid;             ///< SSID da rede Wi-Fi a conectar.
+    const char* password;         ///< Senha de autenticação da rede Wi-Fi.
+    const char* apexUrl;          ///< URL completa do endpoint ORDS (ex: http://host/ords/uplink).
+    const char* apiKey;           ///< API KEY para acesso ao endpoint ORDS
+    const char* deviceId;         ///< Identificador único do dispositivo (DevEUI).
+    unsigned long connectTimeout; ///< Timeout em milissegundos para tentativas de conexão.
 };
 
 /**
  * @class WiFiHandler
- * @brief Implementação concreta do CommunicationHandler via Wi-Fi + Firebase.
- * @details Esta classe permite que o firmware, originalmente desenhado para LoRaWAN,
- * funcione sobre Wi-Fi sem alterar a lógica de negócios principal.
- * Os dados enviados via `send()` são convertidos para Hexadecimal e 
- * armazenados no caminho `/devices/{deviceId}/uplinks` do Firebase.
+ * @brief Handler responsável pela comunicação Wi-Fi com Oracle APEX via REST API.
+ * @details Implementa a interface CommunicationHandler para gerenciar conexão Wi-Fi,
+ *          envio de uplinks formatados em JSON e recebimento de downlinks do servidor.
+ *          Realiza conversão de dados para Base64 e montagem de payloads HTTP.
+ * @see CommunicationHandler
  */
 class WiFiHandler : public CommunicationHandler {
 private:
-
-    // --- Configurações e Estado ---
-
-    WiFiConfig config;              /**< @brief Cópia local das configurações. */
-    ConnectionState currentState;   /**< @brief Estado atual da máquina de estados de comunicação. */
-    bool _isConfirmed;              /**< @brief Flag que indica se o último envio recebeu ACK (HTTP 200 OK). */
-
-    // --- Objetos da Biblioteca Firebase ---
-
-    FirebaseData fbdo;              /**< @brief Objeto de dados principal para operações do Firebase (Request/Response). */
-    FirebaseAuth auth;              /**< @brief Objeto de autenticação (sessão do usuário). */
-    
-    /**
-     * @brief Objeto de configuração da biblioteca Firebase.
-     * @note O tipo é 'FirebaseConfig' (definido pela biblioteca), não confundir com WiFiConfig.
-     */
-    FirebaseConfig fconfig;         
-
-    // --- Métodos Auxiliares Privados ---
+    WiFiConfig config;              ///< Configuração da conexão Wi-Fi
+    ConnectionState currentState;   ///< Estado atual da conexão
+    bool _isConfirmed;              ///< Flag de confirmação de mensagem enviada
 
     /**
-     * @brief Converte um buffer de bytes cru para uma String Hexadecimal.
-     * @details Utilizado para simular o payload LoRa no formato que os Network Servers geralmente exibem.
-     * @param data Ponteiro para o array de bytes.
-     * @param length Tamanho do array.
-     * @return String Representação em string (ex: "010AF3").
+     * @brief Converte dados binários para string Base64.
+     * @param data Ponteiro para os dados a serem codificados.
+     * @param length Tamanho em bytes dos dados.
+     * @return String contendo os dados codificados em Base64.
      */
     String bufferToBase64(const uint8_t* data, uint16_t length);
 
     /**
-     * @brief Atualiza o estado interno da conexão.
-     * @details Verifica se o Wi-Fi caiu ou se o Firebase precisa renovar token.
+     * @brief Atualiza o estado atual da conexão Wi-Fi.
+     * @details Verifica o status da conexão e atualiza currentState.
+     * @see updateState()
      */
     void updateState();
 
 public:
-
     /**
-     * @brief Construtor do WiFiHandler.
-     * @param cfg Estrutura contendo as credenciais e configurações iniciais.
+     * @brief Construtor parameterizado do WiFiHandler.
+     * @param cfg Referência constante para a estrutura de configuração WiFiConfig.
      */
     explicit WiFiHandler(const WiFiConfig& cfg);
 
     /**
-     * @brief Destrutor padrão.
-     * @details Encerra a conexão Wi-Fi se necessário.
+     * @brief Destrutor virtual do WiFiHandler.
      */
     ~WiFiHandler() override = default;
 
     /**
-     * @brief Inicializa as configurações da biblioteca Firebase.
-     * @details Configura API Key, URL e callbacks de token. Não conecta no Wi-Fi ainda.
-     * @return bool Retorna true se a configuração inicial foi aceita.
+     * @brief Inicializa o módulo Wi-Fi.
+     * @details Configura o Wi-Fi em modo estação (STA) e prepara para conexão.
+     * @return true se a inicialização foi bem-sucedida, false caso contrário.
      */
     bool begin() override;
 
     /**
-     * @brief Finaliza o handler e desconecta o Wi-Fi.
+     * @brief Finaliza e desliga o módulo Wi-Fi.
+     * @details Desconecta da rede e coloca o Wi-Fi em modo sleep/desligado.
      */
     void end() override;
 
     /**
-     * @brief Inicia a conexão com a rede Wi-Fi.
-     * @details Bloqueia (com timeout) até obter IP ou falhar. Inicializa o Firebase após conectar.
-     * @return bool true se conectado com sucesso (Wi-Fi + Firebase Ready).
+     * @brief Conecta à rede Wi-Fi configurada.
+     * @details Tenta estabelecer conexão com o SSID especificado usando as credenciais.
+     * @return true se conectado com sucesso, false se falha na conexão.
+     * @see WiFiConfig::connectTimeout
      */
     bool connect() override;
 
     /**
-     * @brief Verifica se a conexão está ativa e pronta para envio.
-     * @return bool true se Wi-Fi está conectado E Firebase está pronto.
+     * @brief Verifica se está conectado à rede Wi-Fi.
+     * @return true se conectado, false caso contrário.
      */
     bool isConnected() override;
-
+    
     /**
-     * @brief Envia um pacote de dados (Uplink).
-     * @details Converte os dados para Hex e faz um PUSH no Firebase.
-     * @param port Porta da aplicação (fPort no LoRaWAN).
-     * @param data Ponteiro para os dados.
-     * @param length Quantidade de bytes.
-     * @return SendResult SUCCESS se o servidor Firebase aceitou o dado (HTTP 200).
+     * @brief Envia dados via HTTP POST para o servidor Oracle APEX.
+     * @details Formata os dados em JSON com Base64 e envia via HTTP POST
+     *          para a URL do endpoint ORDS configurado.
+     * @param port Número da porta (utilizado para compatibilidade com interface).
+     * @param data Ponteiro para os dados a serem enviados.
+     * @param length Tamanho em bytes dos dados.
+     * @return SendResult contendo status de envio e confirmação.
+     * @see SendResult
      */
     SendResult send(uint8_t port, const uint8_t* data, uint16_t length) override;
-
+    
     /**
-     * @brief Verifica se o último envio foi confirmado.
-     * @details No contexto HTTP/Firebase, é síncrono, então retorna true logo após um envio com sucesso.
-     * @return bool true se confirmado.
+     * @brief Verifica se a última mensagem foi confirmada pelo servidor.
+     * @return true se confirmada, false caso contrário.
      */
     bool isConfirmed() override;
 
     /**
-     * @brief Verifica se há mensagens de descida (Downlink).
-     * @note Implementação atual é um Mock (retorna NO_MESSAGE), mas pode ser expandida para ler do banco.
-     * @param message Estrutura onde a mensagem será gravada.
-     * @return ReceiveResult Resultado da operação.
+     * @brief Recebe downlinks (comandos) do servidor Oracle APEX.
+     * @param message Referência para a estrutura que receberá a mensagem.
+     * @return ReceiveResult contendo status e dados da mensagem recebida.
+     * @see ReceiveResult, DownlinkMessage
      */
     ReceiveResult receive(DownlinkMessage& message) override;
 
     /**
-     * @brief Obtém o enum do estado atual.
-     * @return ConnectionState (CONNECTED, DISCONNECTED, ERROR, etc).
+     * @brief Obtém o estado atual da conexão.
+     * @return ConnectionState representando o estado presente.
+     * @see ConnectionState
      */
     ConnectionState getConnectionState() override;
 
     /**
-     * @brief Função de "Housekeeping".
-     * @details Deve ser chamada no loop principal. Mantém o token do Firebase renovado.
+     * @brief Processa tarefas assíncronas do handler Wi-Fi.
+     * @details Realiza verificações periódicas de estado e reconexão se necessário.
      */
     void process() override;
 
     /**
-     * @brief Retorna uma string legível do estado atual (para Logs).
-     * @return const char* Ex: "WIFI_CONNECTED".
+     * @brief Retorna uma string descritiva do estado atual.
+     * @return Ponteiro para string com nome legível do estado.
      */
     const char* getStateString() override;
-    
+
     /**
-     * @brief Obtém o timeout apropriado para aguardar ACK/Confirmação.
-     * @return unsigned long 10000 ms (10 segundos) - WiFi é instantâneo
+     * @brief Retorna o timeout para confirmação de mensagem.
+     * @return Timeout em milissegundos.
      */
     unsigned long getConfirmationTimeout() override;
-    
 };
 
 #endif /* _WIFI_HANDLER_H */

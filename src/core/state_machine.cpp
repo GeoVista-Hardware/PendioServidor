@@ -54,18 +54,32 @@ SystemState process_state_ready(CommunicationHandler* commHandler) {
   );
 
   if (sendResult == SendResult::SUCCESS) {
+
     LOGI("COMM", "Envio aceito pelo Handler");
     exception_handling(ERROR_RESTART);
-    return STATE_WAIT_CFM;
-  }
-  else if (sendResult == SendResult::PENDING) {
+
+    #ifdef COMMUNICATION_MODE_WIFI
+      // HTTP 200 já é o ACK -> não espera confirmação
+      unsigned long totalCicloMs = (unsigned long)NVM_LoRaWAN_Cycle_Time * 60000;
+      if (totalCicloMs == 0) totalCicloMs = 180000; // Mínimo 3 minutos
+      LOGI("SYSTEM", "Ciclo aguardando até %lu ms para próximo envio", totalCicloMs);
+      return STATE_READY;
+    #else
+      // LoRaWAN precisa esperar ACK
+      return STATE_WAIT_CFM;
+    #endif
+
+  } else if (sendResult == SendResult::PENDING) {
+
     LOGW("COMM", "Envio pendente");
     return STATE_READY;
-  }
-  else {
+
+  } else {
+
     LOGE("COMM", "Envio negado/falha - reiniciando conexão");
     exception_handling(ERROR_LORAWAN);
     return STATE_NOT_JOINED;
+
   }
 }
 

@@ -61,12 +61,12 @@ LoRaConfig loraConfig = {
 
 #ifdef COMMUNICATION_MODE_WIFI
 
-  // Configuração do Wi-Fi/Firebase Handler (credenciais em credentials.h)
+  // Configuração do Wi-Fi/Oracle APEX
   WiFiConfig wifiConfig = {
       .ssid = WIFI_SSID,
       .password = WIFI_PASSWORD,
-      .apiKey = FIREBASE_API_KEY,
-      .databaseUrl = FIREBASE_DB_URL,
+      .apexUrl = DB_URL,
+      .apiKey = API_KEY,
       .deviceId = DEVICE_ID,
       .connectTimeout = 30000
   };
