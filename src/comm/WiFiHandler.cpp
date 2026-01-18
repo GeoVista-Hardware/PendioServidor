@@ -98,13 +98,20 @@ bool WiFiHandler::isConnected() {
 }
 
 SendResult WiFiHandler::send(uint8_t port, const uint8_t* data, uint16_t length) {
+
     if (!isConnected()) return SendResult::NOT_CONNECTED;
 
-    // 1. Processamento do Payload 
+    // ========================================================================
+    // Processamento do Payload (Hex String -> Binário -> Base64)
+    // ========================================================================
+    
+    // Calcula tamanho real da string hex
     size_t hexLen = strnlen((const char*)data, length);
     if (hexLen % 2 != 0) hexLen--; 
     
     size_t binLen = hexLen / 2;
+    
+    // Alocação temporária para conversão (pequena e rápida, deletada logo em seguida)
     uint8_t* binBuffer = new uint8_t[binLen];
 
     for (size_t i = 0; i < binLen; i++) {
@@ -114,30 +121,47 @@ SendResult WiFiHandler::send(uint8_t port, const uint8_t* data, uint16_t length)
     }
 
     String base64Payload = base64::encode(binBuffer, binLen);
-    delete[] binBuffer;
+    
+    delete[] binBuffer; // Limpa buffer binário imediatamente
 
-    // 2. Montagem do JSON
-    String jsonPayload = "{";
-    jsonPayload += "\"meta\": {";
-    jsonPayload += "\"time\": " + String(millis()) + ",";
-    jsonPayload += "\"packet_id\": " + String(millis()/1000) + ",";
-    jsonPayload += "\"device_name\": \"PendioSensor\",";
-    jsonPayload += "\"device\": \"" + String(config.deviceId) + "\"";
-    jsonPayload += "},";
-    jsonPayload += "\"params\": {";
-    jsonPayload += "\"payload\": \"" + base64Payload + "\",";
-    jsonPayload += "\"encrypted_payload\": \"" + base64Payload + "\",";
-    jsonPayload += "\"duplicate\": \"false\"";
-    jsonPayload += "}";
-    jsonPayload += "}";
+    LOGD("WiFi", "Montando JSON...");
 
-    LOGD("WiFi", "Enviando JSON para Oracle...");
+    // ========================================================================
+    // Montagem do JSON (Zero Alocação Dinâmica)
+    // ========================================================================
+    
+    unsigned long now = millis();
+    
+    // Limpa o buffer estático para garantir que não tenha lixo
+    memset(txBuffer, 0, WIFI_TX_BUFFER_SIZE);
 
-    // 3. Configuração e Envio
+    // Formata o JSON diretamente no buffer pré-alocado
+    // Nota: %.3f ou %s são usados conforme o tipo. %lu é para unsigned long.
+    int len = snprintf(txBuffer, WIFI_TX_BUFFER_SIZE, 
+        "{\"meta\":{\"time\":%lu,\"packet_id\":%lu,\"device_name\":\"PendioSensor\",\"device\":\"%s\"},"
+        "\"params\":{\"payload\":\"%s\",\"encrypted_payload\":\"%s\",\"duplicate\":\"false\"}}",
+        now,
+        now / 1000,
+        config.deviceId,
+        base64Payload.c_str(), // Extrai o array de char da String
+        base64Payload.c_str()
+    );
+
+    // Verifica se o JSON coube no buffer
+    if (len < 0 || len >= WIFI_TX_BUFFER_SIZE) {
+        LOGE("WiFi", "Buffer Overflow! JSON muito grande para txBuffer.");
+        return SendResult::FAILED;
+    }
+
+    LOGD("WiFi", "JSON Length: %d", len);
+
+    // ========================================================================
+    // Configuração e Envio 
+    // ========================================================================
 
     ParsedUrl url = parseUrl(config.apexUrl);
     WiFiClientSecure client;
-    client.setInsecure();
+    client.setInsecure(); 
     client.setTimeout(config.connectTimeout);
 
     if (!client.connect(url.host.c_str(), url.port)) {
@@ -145,73 +169,71 @@ SendResult WiFiHandler::send(uint8_t port, const uint8_t* data, uint16_t length)
         return SendResult::FAILED;
     }
 
-    String request =
-        "POST " + url.path + " HTTP/1.1\r\n"
-        "Host: " + url.host + "\r\n"
+    // Envia Headers linha a linha 
+
+    client.print("POST ");
+    client.print(url.path);
+    client.println(" HTTP/1.1");
+    
+    client.print("Host: ");
+    client.println(url.host);
+    
     #ifdef WIFI_USE_API_KEY
-        "X-API-Key: " + String(config.apiKey) + "\r\n"
+    client.print("X-API-Key: ");
+    client.println(config.apiKey);
     #endif
-        "Content-Type: application/json\r\n"
-        "Content-Length: " + String(jsonPayload.length()) + "\r\n"
-        "Connection: close\r\n\r\n" +
-        jsonPayload;
+    
+    client.println("Content-Type: application/json");
+    client.print("Content-Length: ");
+    client.println(len); 
+    client.println("Connection: close");
+    client.println(); 
+    
+    // Envia o Corpo (JSON que está no txBuffer)
+    client.print(txBuffer);
 
-    client.print(request);
-
+    // ========================================================================
+    // Tratamento da Resposta
+    // ========================================================================
+    
+    // Lê apenas a primeira linha para pegar o status (ex: "HTTP/1.1 200 OK")
     String statusLine = client.readStringUntil('\n');
     statusLine.trim();
     LOGD("WiFi", "HTTP Status: %s", statusLine.c_str());
 
-    LOGD("WiFi", "HTTP Status: %s", statusLine.c_str());
-
+    // Consome (descarta) o resto dos headers da resposta para liberar o buffer de entrada
     while (client.connected()) {
         String line = client.readStringUntil('\n');
-        if (line == "\r" || line.length() == 0) {
-            break; // fim dos headers
-        }
+        if (line == "\r" || line.length() == 0) break;
     }
 
-    String responseBody;
-    unsigned long start = millis();
+    // Verifica sucesso (Códigos 200 ou 201)
+    if (statusLine.indexOf("200") > 0 || statusLine.indexOf("201") > 0) {
 
-    while (client.connected() && millis() - start < 3000) {
-        while (client.available()) {
-            responseBody += (char)client.read();
+        LOGI("WiFi", "POST aceito pelo servidor (Sucesso)");
+        client.stop();
+        _isConfirmed = true;
+        currentState = ConnectionState::WAITING_CONFIRMATION;
+        return SendResult::SUCCESS;
+
+    } else {
+
+        // Em caso de erro, imprime o corpo da resposta no Serial para debug
+        LOGE("WiFi", "Erro no envio. Resposta do servidor:");
+        
+        unsigned long errorStart = millis();
+        while(client.connected() && (millis() - errorStart < 2000)) {
+            if(client.available()) {
+                char c = client.read();
+                Serial.print(c); 
+            }
         }
-    }
 
-    responseBody.trim();
-
-    String cleanBody;
-    for (size_t i = 0; i < responseBody.length(); i++) {
-        char c = responseBody[i];
-        if (c >= 32 && c <= 126) {  // ASCII imprimível
-            cleanBody += c;
-        }
-    }
-
-    responseBody = cleanBody;
-
-    LOGD("WiFi", "HTTP Body: %s", responseBody.c_str());
-
-    if (responseBody.length() == 0) {
-        LOGE("WiFi", "Resposta vazia do servidor");
+        Serial.println(); 
         client.stop();
         return SendResult::FAILED;
+
     }
-
-    if (responseBody.indexOf("\"erro\"") >= 0) {
-        LOGE("WiFi", "Erro retornado pelo servidor: %s", responseBody.c_str());
-        client.stop();
-        return SendResult::FAILED;
-    }
-
-    LOGI("WiFi", "POST aceito pelo servidor");
-    client.stop();
-
-    _isConfirmed = true;
-    currentState = ConnectionState::WAITING_CONFIRMATION;
-    return SendResult::SUCCESS;
 
 }
 

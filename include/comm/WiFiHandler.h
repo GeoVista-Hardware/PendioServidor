@@ -18,6 +18,11 @@
 #include <base64.h>               ///< Para codificação do payload em Base64
 
 /**
+ * @brief Tamanho do buffer estático
+ */
+#define WIFI_TX_BUFFER_SIZE 1024
+
+/**
  * @struct WiFiConfig
  * @brief Estrutura de configuração para o handler Wi-Fi.
  * @details Contém todos os parâmetros necessários para configurar a conexão Wi-Fi
@@ -42,9 +47,10 @@ struct WiFiConfig {
  */
 class WiFiHandler : public CommunicationHandler {
 private:
-    WiFiConfig config;              ///< Configuração da conexão Wi-Fi
-    ConnectionState currentState;   ///< Estado atual da conexão
-    bool _isConfirmed;              ///< Flag de confirmação de mensagem enviada
+    WiFiConfig config;                    ///< Configuração da conexão Wi-Fi
+    ConnectionState currentState;         ///< Estado atual da conexão
+    bool _isConfirmed;                    ///< Flag de confirmação de mensagem enviada
+    char txBuffer[WIFI_TX_BUFFER_SIZE];   ///< Buffer estático
 
     /**
      * @brief Converte dados binários para string Base64.
