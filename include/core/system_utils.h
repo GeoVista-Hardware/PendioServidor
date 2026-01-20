@@ -43,6 +43,11 @@ uint8_t Validate_Cycle_Time(uint8_t ct);
 uint8_t Validate_Settings(uint8_t st);
 
 /**
+ * @brief Verifica se os dados de configuração na EEPROM estão atualizados.
+ */
+void checkAndResetSettings();
+
+/**
  * @brief Calcula quanto tempo falta para fechar o ciclo de envio.
  */
 unsigned long calculate_next_cycle(SystemContext* ctx);

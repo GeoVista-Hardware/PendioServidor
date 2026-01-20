@@ -145,6 +145,7 @@ CommunicationHandler* initializeCommunicationHandler(void) {
 
   // Leitura da EEPROM (comum aos dois modos)
   #ifdef USE_EEPROM
+    checkAndResetSettings();
     sysContext.cycleTimeMinutes = EEPROM.read(0);
     sysContext.useConfirmation = (NVM_SETTINGS_CFM_BIT == (EEPROM.read(1) & NVM_SETTINGS_CFM_BIT));
   #else

@@ -66,12 +66,12 @@ typedef unsigned short ushort;
 /** @brief Define o modo de comunicação */
 // Descomente a linha abaixo para ativar o modo Wi-Fi
 // Comente para compilar a versão LoRaWAN
-#define COMMUNICATION_MODE_WIFI 
+// #define COMMUNICATION_MODE_WIFI 
 
 /** @brief Define se usará API KEY para autenticação */
 // Descomente a linha abaixo para ativar a autenticação via API Key
 // Comente para compilar a versão sem autenticação
-#define WIFI_USE_API_KEY
+// #define WIFI_USE_API_KEY
 
 /** @brief Ativa logging serial estruturado (RECOMENDADO) */
 #define ENABLE_LOGGING              1
@@ -86,6 +86,19 @@ typedef unsigned short ushort;
 // Definir para usar EEPROM para persistência de dados
 // Comente para desativar
 #define USE_EEPROM
+
+/** @brief Valor que define a integridade dos dados na EEPROM */
+// Mude este valor (ex: 0xA6) para forçar um reset nas configurações
+#define EEPROM_MAGIC_NUMBER         0xA5  
+
+/** @brief Endereço do tempo de ciclo */
+#define EEPROM_ADDR_CYCLE           0     
+
+/** @brief Endereço das flags (CFM, etc) */
+#define EEPROM_ADDR_CONFIG          1     
+
+/** @brief Endereço onde guardamos o Magic Number */
+#define EEPROM_ADDR_MAGIC           2     
 
 /** @brief Bit de CFM em EEPROM (NVM settings) */
 #define NVM_SETTINGS_CFM_BIT        0x01

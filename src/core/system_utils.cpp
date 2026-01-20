@@ -103,6 +103,43 @@ uint8_t Validate_Settings(uint8_t st) {
 }
 
 /**
+ * @brief Verifica se os dados na EEPROM estão atualizados.
+ */
+void checkAndResetSettings() {
+  
+    EEPROM.begin(512); // Garante inicialização
+    
+    uint8_t storedMagic = EEPROM.read(EEPROM_ADDR_MAGIC);
+    
+    // Se o número mágico não bater, significa que é um firmware novo 
+    // ou uma EEPROM virgem. Deve-se resetar!
+    if (storedMagic != EEPROM_MAGIC_NUMBER) {
+        LOGW("SYSTEM", "EEPROM desatualizada ou invalida. Resetando para padroes...");
+        
+        // Grava o Ciclo Padrão (3 minutos ou o que estiver no define)
+        // Usando CYCLE_DEFAULT_MIN ou o valor que você quer forçar agora
+        EEPROM.write(EEPROM_ADDR_CYCLE, CYCLE_FAST_MIN); // Força 3 min (CYCLE_FAST_MIN)
+        
+        // Grava as Configurações 
+        // Se LORA_USE_CONFIRMATION for 0, grava sem confirmação
+        uint8_t configByte = 0;
+        #if LORA_USE_CONFIRMATION
+            configByte |= NVM_SETTINGS_CFM_BIT;
+        #endif
+        EEPROM.write(EEPROM_ADDR_CONFIG, configByte);
+        
+        // Atualiza o Magic Number para não resetar na próxima vez
+        EEPROM.write(EEPROM_ADDR_MAGIC, EEPROM_MAGIC_NUMBER);
+        
+        EEPROM.commit();
+        LOGI("SYSTEM", "Configuracoes da EEPROM aplicadas com sucesso!");
+    } else {
+        LOGI("SYSTEM", "Configuracoes da EEPROM validas.");
+    }
+
+}
+
+/**
  * @brief Calcula quanto tempo falta para fechar o ciclo de envio.
  */
 unsigned long calculate_next_cycle(SystemContext* ctx) {
